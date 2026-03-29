@@ -2704,6 +2704,7 @@
     let lastSeenStorageRevision = '';
     let lastServerRevision = '';
     let plannerSyncTimer = null;
+    let plannerSyncReason = '';
     let plannerPollTimer = null;
     let isApplyingRemoteState = false;
     let storagePollTimer = null;
@@ -2950,10 +2951,37 @@
       }, 220);
     }
 
+    function buildPlannerPayloadSummary(payload = {}) {
+      const storage = payload.storage || {};
+      const taskState = storage.txMoveTaskState;
+      const taskStates = taskState ? safeParseJsonArray(taskState) : [];
+      const taskChecks = storage.txMoveTasks ? safeParseJsonArray(storage.txMoveTasks) : [];
+      const notes = storage.txMoveNotes || '';
+      const budget = storage.txMoveBudget || '';
+
+      return {
+        reason: plannerSyncReason || 'local-change',
+        taskStateCount: Array.isArray(taskStates) ? taskStates.length : 0,
+        checkedCount: Array.isArray(taskChecks) ? taskChecks.filter(Boolean).length : 0,
+        notesLength: typeof notes === 'string' ? notes.length : String(notes || '').length,
+        budgetLength: typeof budget === 'string' ? budget.length : String(budget || '').length
+      };
+    }
+
+    function safeParseJsonArray(value) {
+      try {
+        const parsed = JSON.parse(value || '[]');
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+
     localStorage.setItem = function(key, value) {
       const normalizedValue = value == null ? '' : String(value);
       originalSetItem.call(this, key, normalizedValue);
       if (!isApplyingRemoteState && String(key).startsWith(STORAGE_REWRITE_PREFIX)) {
+        plannerSyncReason = `storage-set:${key}`;
         queuePlannerSync();
       }
     };
@@ -2961,6 +2989,7 @@
     localStorage.removeItem = function(key) {
       originalRemoveItem.call(this, key);
       if (!isApplyingRemoteState && String(key).startsWith(STORAGE_REWRITE_PREFIX)) {
+        plannerSyncReason = `storage-remove:${key}`;
         queuePlannerSync();
       }
     };
@@ -2981,6 +3010,12 @@
     async function persistPlannerDataToServer(_source = 'local-change') {
       try {
         const body = buildPlannerPayload();
+        const summary = buildPlannerPayloadSummary(body);
+        console.log(`[Planner Sync] POST /data`, {
+          method: 'POST',
+          url: PLANNER_API_URL,
+          payload: summary
+        });
         const res = await fetch(PLANNER_API_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2988,7 +3023,13 @@
         });
 
         if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
+          const responseText = await res.text();
+          console.error('[Planner Sync] POST /data failed', {
+            status: res.status,
+            responseText
+          });
+          setPlannerSyncStatus(`서버 저장 실패: HTTP ${res.status}`, true);
+          return;
         }
 
         const result = await res.json().catch(() => ({}));
@@ -2996,9 +3037,10 @@
           lastServerRevision = String(result.updatedAt);
         }
         setPlannerSyncStatus('');
+        plannerSyncReason = '';
       } catch (error) {
-        console.error(error);
-        setPlannerSyncStatus(`저장 동기화 실패: ${error.message || '네트워크 오류'}`, true);
+        console.error('[Planner Sync] POST /data exception', error);
+        setPlannerSyncStatus(`서버 저장 실패: ${error.message || '네트워크 오류'}`, true);
       }
     }
 
@@ -3011,11 +3053,17 @@
           throw new Error(`HTTP ${res.status}`);
         }
         const result = await res.json();
+        console.log('[Planner Sync] GET /data response', {
+          status: res.status
+        });
         const remoteRevision = String(result?.updatedAt || '');
         if (!force && remoteRevision && remoteRevision === lastServerRevision) return;
 
         const storage = result?.storage || {};
-        if (!storage || typeof storage !== 'object' || !Object.keys(storage).length) return;
+        if (!storage || typeof storage !== 'object' || !Object.keys(storage).length) {
+          setPlannerSyncStatus('서버 데이터가 비어 있습니다. 로컬 데이터로 동작합니다.', false);
+          return;
+        }
 
         isApplyingRemoteState = true;
         TASK_STORAGE_KEYS.forEach(key => {
@@ -3032,9 +3080,11 @@
         isApplyingRemoteState = false;
 
         lastServerRevision = remoteRevision || `${Date.now()}`;
+        console.log('[Planner Sync] GET /data applied to UI state');
         setPlannerSyncStatus('');
         if (force || !document.hidden) {
           loadState();
+          setPlannerSyncStatus('서버 데이터 반영됨');
         }
       } catch (error) {
         isApplyingRemoteState = false;
@@ -4493,6 +4543,7 @@
 
     taskList.addEventListener('change', event => {
       if (event.target.matches('.task-due')) {
+        console.log('[Planner Sync Trigger] task due-date changed');
         const task = event.target.closest('.task');
         if (!task) return;
         const section = normalizeTaskSection(task.dataset.section);
@@ -4517,6 +4568,7 @@
       }
 
       if (event.target.matches('.task-priority')) {
+        console.log('[Planner Sync Trigger] task priority changed');
         const task = event.target.closest('.task');
         if (!task) return;
         setTaskPriority(task, event.target.value);
@@ -4527,12 +4579,14 @@
       }
 
       if (event.target.matches('[data-task]')) {
+        console.log('[Planner Sync Trigger] task done state changed');
         updateProgress();
       }
     });
 
     taskList.addEventListener('input', event => {
       if (event.target.matches('.task-cost-input')) {
+        console.log('[Planner Sync Trigger] task cost changed');
         const task = event.target.closest('.task');
         if (!task) return;
         const raw = event.target.value;
@@ -4546,6 +4600,7 @@
       if (!event.target.matches('.task-title[contenteditable="true"], .task-desc[contenteditable="true"]')) {
         return;
       }
+      console.log('[Planner Sync Trigger] task title/desc edited');
       const task = event.target.closest('.task');
       if (!task) return;
       const sanitized = normalizeTaskText(event.target.textContent || '');
@@ -4621,6 +4676,7 @@
 
       const addCostButton = event.target.closest('.task-cost-add');
       if (addCostButton) {
+        console.log('[Planner Sync Trigger] task cost edit opened');
         const wrapper = clickedTask.querySelector('.task-cost-wrap');
         const costInput = wrapper?.querySelector('.task-cost-input');
         if (wrapper && costInput) {
@@ -4636,6 +4692,7 @@
 
       const confirmCostButton = event.target.closest('.task-cost-confirm');
       if (confirmCostButton) {
+        console.log('[Planner Sync Trigger] task cost confirmed');
         const wrapper = clickedTask.querySelector('.task-cost-wrap');
         const costInput = wrapper?.querySelector('.task-cost-input');
         if (wrapper && costInput) {
@@ -4746,6 +4803,7 @@
     });
 
     addTaskBtn.addEventListener('click', () => {
+      console.log('[Planner Sync Trigger] custom task added');
       const title = customTaskTitle.value.trim();
       const desc = customTaskDesc.value.trim();
       const priority = customTaskPriority.value;
@@ -4788,7 +4846,10 @@
     });
 
     budgetIds.forEach(id => {
-      document.getElementById(id).addEventListener('input', updateBudget);
+      document.getElementById(id).addEventListener('input', () => {
+        console.log('[Planner Sync Trigger] budget changed');
+        updateBudget();
+      });
     });
 
     themeToggle.addEventListener('click', () => {
@@ -4797,11 +4858,13 @@
     });
 
     moveDateInput.addEventListener('input', event => {
+      console.log('[Planner Sync Trigger] move date changed');
       updateMoveDate(event.target.value);
       updateProgress();
     });
 
     notes.addEventListener('input', () => {
+      console.log('[Planner Sync Trigger] notes changed');
       localStorage.setItem('txMoveNotes', notes.value);
       notifyStorageSync('notes');
     });
