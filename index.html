@@ -2419,7 +2419,7 @@
       </section>
 
       <div class="right-stack">
-        <section class="panel">
+  <section class="panel">
           <div class="panel-head">
             <div class="panel-title-block">
               <h2>간단 타임라인</h2>
@@ -2541,6 +2541,7 @@
             <button class="primary" id="exportBtn" type="button">메모 복사하기</button>
             <button class="secondary" id="resetBtn" type="button">체크리스트 초기화</button>
           </div>
+          <div class="helper" id="plannerSyncStatus" role="status" aria-live="polite"></div>
           <div class="helper">체크 상태, 메모, 예산, 추가한 항목 모두 자동 저장됩니다.</div>
         </section>
 
@@ -2621,6 +2622,7 @@
     const addScheduleBtn = document.getElementById('addScheduleBtn');
     const scheduleList = document.getElementById('scheduleList');
     const notes = document.getElementById('notes');
+    const plannerSyncStatus = document.getElementById('plannerSyncStatus');
     const moveDateInput = document.getElementById('moveDateInput');
     const moveDateDisplay = document.getElementById('moveDateDisplay');
     const dDayDisplay = document.getElementById('dDayDisplay');
@@ -2690,7 +2692,7 @@
       'txMoveCalendarCollapsed',
       'txMoveScheduleEvents'
     ];
-    const PLANNER_API_BASE = 'http://<YOUR_ORACLE_VM_IP_OR_HOST>:3000';
+    const PLANNER_API_BASE = 'https://movingtocelina.duckdns.org';
     const PLANNER_API_URL = `${PLANNER_API_BASE.replace(/\/$/, '')}/data`;
     const PLANNER_SYNC_INTERVAL_MS = 5000;
     const TASK_STORAGE_REVISION_KEY = 'txMoveStorageRevision';
@@ -2819,6 +2821,12 @@
       googleCalendarStatus.style.color = isError ? 'var(--danger)' : '';
     }
 
+    function setPlannerSyncStatus(message, isError = false) {
+      if (!plannerSyncStatus) return;
+      plannerSyncStatus.textContent = message || '';
+      plannerSyncStatus.style.color = isError ? 'var(--danger)' : '';
+    }
+
     function updateGoogleButtons() {
       googleConnectBtn.textContent = googleCalendarConnected ? '구글 캘린더 다시 연결' : '구글 캘린더 연결';
       googleSyncBtn.disabled = !googleCalendarConnected;
@@ -2926,26 +2934,7 @@
       return fallback || '';
     }
 
-    function logTaskDebugState(label = 'state') {
-      const moveDate = getMoveDateKey();
-      const tasks = getAllTaskCards().map(task => {
-        const titleText = task.querySelector('.task-title')?.textContent?.trim() || '';
-        return {
-          id: task.dataset.taskId || '',
-          title: titleText,
-          section: getTaskSection(task),
-          done: Boolean(task.querySelector('[data-task]')?.checked),
-          dueDate: getTaskDueDateValue(task),
-          dueOffset: getStoredDueOffset(task),
-          estimatedCost: getTaskEstimatedCost(task)
-        };
-      });
-
-      console.group(`Move Planner Debug (${label})`);
-      console.log('Move Date:', moveDate);
-      console.log('Tasks:', tasks);
-      console.groupEnd();
-    }
+    function logTaskDebugState() {}
 
     let pendingStorageRefresh = null;
     const STORAGE_REWRITE_PREFIX = 'txMove';
@@ -2999,15 +2988,17 @@
         });
 
         if (!res.ok) {
-          return;
+          throw new Error(`HTTP ${res.status}`);
         }
 
         const result = await res.json().catch(() => ({}));
         if (result?.updatedAt) {
           lastServerRevision = String(result.updatedAt);
         }
-      } catch {
-        // silent
+        setPlannerSyncStatus('');
+      } catch (error) {
+        console.error(error);
+        setPlannerSyncStatus(`저장 동기화 실패: ${error.message || '네트워크 오류'}`, true);
       }
     }
 
@@ -3016,7 +3007,9 @@
 
       try {
         const res = await fetch(`${PLANNER_API_URL}?ts=${Date.now()}`, { cache: 'no-store' });
-        if (!res.ok) return;
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
         const result = await res.json();
         const remoteRevision = String(result?.updatedAt || '');
         if (!force && remoteRevision && remoteRevision === lastServerRevision) return;
@@ -3039,11 +3032,14 @@
         isApplyingRemoteState = false;
 
         lastServerRevision = remoteRevision || `${Date.now()}`;
+        setPlannerSyncStatus('');
         if (force || !document.hidden) {
           loadState();
         }
-      } catch {
+      } catch (error) {
         isApplyingRemoteState = false;
+        console.error(error);
+        setPlannerSyncStatus(`데이터 불러오기 실패: ${error.message || '네트워크 오류'}`, true);
       }
     }
 
