@@ -2776,6 +2776,10 @@
       : null;
     let lastSeenStorageRevision = '';
     let lastServerRevision = '';
+    let localLastModifiedAt = 0;
+    let lastRemoteAppliedAt = 0;
+    let lastSyncRequestAt = 0;
+    let localSyncInProgress = false;
     let plannerSyncTimer = null;
     let plannerSyncReason = '';
     let plannerPollTimer = null;
@@ -3016,6 +3020,10 @@
     const originalRemoveItem = localStorage.removeItem.bind(localStorage);
 
     function queuePlannerSync() {
+      localLastModifiedAt = Date.now();
+      localSyncInProgress = true;
+      setPlannerSyncStatus('동기화 진행 중', false);
+      updateServerSyncCard(getPlannerPayloadFromStorage(), '', '동기화 진행 중');
       if (plannerSyncTimer) {
         clearTimeout(plannerSyncTimer);
       }
@@ -3209,13 +3217,20 @@
     }
 
     async function persistPlannerDataToServer(_source = 'local-change') {
+      const postStartedAt = Date.now();
+      const localRevisionAtRequest = localLastModifiedAt || postStartedAt;
+      const payload = buildPlannerPayload();
       try {
-        const body = buildPlannerPayload();
-        console.log('[Planner Sync] POST /data body ready', {
-          hasPlanner: !!body?.planner,
-          hasStorage: !!body?.storage
+        console.log('[Planner Sync] POST /data start', {
+          startedAt: postStartedAt,
+          localLastModifiedAt,
+          hasPlanner: !!payload?.planner
         });
-        const summary = buildPlannerPayloadSummary(body);
+        console.log('[Planner Sync] POST /data body ready', {
+          hasPlanner: !!payload?.planner,
+          hasStorage: !!payload?.storage
+        });
+        const summary = buildPlannerPayloadSummary(payload);
         console.log(`[Planner Sync] POST /data`, {
           method: 'POST',
           url: PLANNER_API_URL,
@@ -3224,7 +3239,7 @@
         const res = await fetch(PLANNER_API_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
+          body: JSON.stringify(payload)
         });
 
         if (!res.ok) {
@@ -3239,23 +3254,47 @@
         }
 
         const result = await res.json().catch(() => ({}));
-        if (result?.updatedAt) {
-          lastServerRevision = String(result.updatedAt);
-          const planner = result?.planner && typeof result.planner === 'object' ? result.planner : buildPlannerPayload().planner;
-          const updatedAt = String(result.updatedAt);
-          updateServerSyncCard(planner, updatedAt, '마지막 저장 성공');
+        const remoteRevision = Number(result?.updatedAt) || 0;
+        if (remoteRevision) {
+          lastServerRevision = String(remoteRevision);
+          const planner = result?.planner && typeof result.planner === 'object'
+            ? result.planner
+            : payload.planner;
+          updateServerSyncCard(planner, String(remoteRevision), '마지막 저장 성공');
+          lastRemoteAppliedAt = remoteRevision;
         }
+        if (!remoteRevision || localRevisionAtRequest <= remoteRevision) {
+          localSyncInProgress = false;
+          localLastModifiedAt = 0;
+          plannerSyncReason = '';
+        }
+        console.log('[Planner Sync] POST /data success', {
+          startedAt: postStartedAt,
+          updatedAt: remoteRevision || payload.updatedAt,
+          localLastModifiedAt
+        });
         setPlannerSyncStatus('');
-        plannerSyncReason = '';
       } catch (error) {
         console.error('[Planner Sync] POST /data exception', error);
         setPlannerSyncStatus(`서버 저장 실패: ${error.message || '네트워크 오류'}`, true);
         updateServerSyncCard({}, '', '마지막 저장 실패');
+        localSyncInProgress = false;
+        localLastModifiedAt = 0;
       }
     }
 
     async function loadPlannerDataFromServer(force = false) {
       if (isApplyingRemoteState) return;
+
+      const getStartedAt = Date.now();
+      lastSyncRequestAt = getStartedAt;
+      console.log('[Planner Sync] GET /data start', {
+        startedAt: getStartedAt,
+        localLastModifiedAt,
+        localSyncInProgress,
+        lastServerRevision,
+        lastRemoteAppliedAt
+      });
 
       try {
         const res = await fetch(`${PLANNER_API_URL}?ts=${Date.now()}`, { cache: 'no-store' });
@@ -3263,10 +3302,11 @@
           throw new Error(`HTTP ${res.status}`);
         }
         const result = await res.json();
+        const remoteRevision = Number(result?.updatedAt) || 0;
         console.log('[Planner Sync] GET /data response', {
-          status: res.status
+          status: res.status,
+          updatedAt: remoteRevision
         });
-        const remoteRevision = String(result?.updatedAt || '');
         const planner = result?.planner || getPlannerFromLegacyStorage(result?.storage);
         if (result?.planner || (result?.storage && typeof result.storage === 'object')) {
           const syncState = '마지막 불러오기 성공';
@@ -3276,7 +3316,36 @@
             notes: typeof notes === 'string' ? notes : String(notes || '')
           }, remoteRevision, syncState);
         }
-        if (!force && remoteRevision && remoteRevision === lastServerRevision) return;
+
+        const hasRemoteData = result?.planner || (result?.storage && typeof result.storage === 'object');
+        const remoteRevisionNum = Number(remoteRevision) || 0;
+        const lastRemoteNum = Number(lastServerRevision) || 0;
+        if (!force && localSyncInProgress && remoteRevisionNum > 0 && localLastModifiedAt > 0 && remoteRevisionNum <= localLastModifiedAt) {
+          console.log('[Planner Sync] GET /data ignored', {
+            reason: 'local change in progress',
+            remoteUpdatedAt: remoteRevisionNum,
+            localLastModifiedAt
+          });
+          return;
+        }
+
+        if (!force && hasRemoteData && remoteRevisionNum > 0 && lastRemoteAppliedAt > 0 && remoteRevisionNum <= lastRemoteAppliedAt) {
+          console.log('[Planner Sync] GET /data ignored', {
+            reason: 'not newer than last applied',
+            remoteUpdatedAt: remoteRevisionNum,
+            lastRemoteAppliedAt
+          });
+          return;
+        }
+
+        if (!force && remoteRevisionNum > 0 && remoteRevisionNum < lastRemoteNum) {
+          console.log('[Planner Sync] GET /data ignored', {
+            reason: 'older remote revision',
+            remoteUpdatedAt: remoteRevisionNum,
+            lastRemoteAppliedAt: lastRemoteNum
+          });
+          return;
+        }
 
         const legacyStorage = result?.storage;
         const hasPlannerPayload = planner && typeof planner === 'object' &&
@@ -3287,6 +3356,15 @@
            (planner.moveDate || '').length > 0);
 
         if (!hasPlannerPayload) {
+          if (!force) {
+            if (hasRemoteData) {
+              console.log('[Planner Sync] GET /data ignored', {
+                reason: 'empty planner payload',
+                remoteUpdatedAt: remoteRevisionNum
+              });
+            }
+            return;
+          }
           setPlannerSyncStatus('서버 데이터가 비어 있습니다. 로컬 데이터로 동작합니다.', false);
           return;
         }
@@ -3296,7 +3374,12 @@
           setPlannerSyncStatus('서버 데이터 구조를 새 형식으로 마이그레이션했습니다.');
         }
 
-        lastServerRevision = remoteRevision || `${Date.now()}`;
+        lastServerRevision = String(remoteRevisionNum || `${Date.now()}`);
+        lastRemoteAppliedAt = remoteRevisionNum || Date.now();
+        if (!localSyncInProgress || localLastModifiedAt <= remoteRevisionNum) {
+          localSyncInProgress = false;
+          localLastModifiedAt = 0;
+        }
         console.log('[Planner Sync] GET /data applied to UI state');
         setPlannerSyncStatus('');
         if (force || !document.hidden) {
@@ -3308,6 +3391,10 @@
         console.error(error);
         setPlannerSyncStatus(`데이터 불러오기 실패: ${error.message || '네트워크 오류'}`, true);
         updateServerSyncCard({}, '', '마지막 불러오기 실패');
+        console.log('[Planner Sync] GET /data failed', {
+          reason: 'exception',
+          error: error.message
+        });
       }
     }
 
@@ -3342,6 +3429,9 @@
     function startPlannerSyncPoll() {
       if (plannerPollTimer) return;
       plannerPollTimer = window.setInterval(() => {
+        if (localSyncInProgress) {
+          return;
+        }
         loadPlannerDataFromServer();
       }, PLANNER_SYNC_INTERVAL_MS);
     }
@@ -5120,7 +5210,9 @@
 
     window.addEventListener('visibilitychange', () => {
       if (!document.hidden) {
-        loadPlannerDataFromServer();
+        if (!localSyncInProgress) {
+          loadPlannerDataFromServer();
+        }
         scheduleStorageRefresh();
       } else {
         persistTaskState();
@@ -5130,7 +5222,9 @@
     });
 
     window.addEventListener('focus', () => {
-      loadPlannerDataFromServer();
+      if (!localSyncInProgress) {
+        loadPlannerDataFromServer();
+      }
       scheduleStorageRefresh();
     });
 
