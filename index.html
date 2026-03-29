@@ -2897,6 +2897,15 @@
       return [...taskList.querySelectorAll('[data-task]')];
     }
 
+    function getAllTaskCards() {
+      return [...taskList.querySelectorAll('.task')].filter(task => taskList.contains(task));
+    }
+
+    function getTaskCardsInSection(sectionKey) {
+      const targetSection = normalizeTaskSection(sectionKey);
+      return getAllTaskCards().filter(task => normalizeTaskSection(task.dataset.section) === targetSection);
+    }
+
     function getCalendarEvents() {
       const raw = localStorage.getItem('txMoveScheduleEvents');
       try {
@@ -3582,8 +3591,10 @@
     function updateProgress() {
       sortAllTaskSections();
 
-      const taskInputs = getTaskInputs();
-      const tasks = [...taskList.querySelectorAll('.task')];
+      const tasks = getAllTaskCards();
+      const taskInputs = tasks
+        .map(task => task.querySelector('[data-task]'))
+        .filter(Boolean);
       const done = taskInputs.filter(input => input.checked).length;
       const total = taskInputs.length;
       const remaining = Math.max(total - done, 0);
@@ -3617,9 +3628,7 @@
       const shortNextTask = nextTaskTitle.length > 10 ? `${nextTaskTitle.slice(0, 10)}...` : nextTaskTitle;
 
       taskSectionKeys.forEach(sectionKey => {
-        const tasksInSection = Array.from(
-          getSectionContainer(sectionKey).querySelectorAll('.task')
-        ).filter(task => taskList.contains(task));
+        const tasksInSection = getTaskCardsInSection(sectionKey);
         const doneInSection = tasksInSection.filter(task => task.querySelector('[data-task]')?.checked).length;
         const totalInSection = tasksInSection.length;
         const sectionText = `${doneInSection} / ${totalInSection} 완료`;
