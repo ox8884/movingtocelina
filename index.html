@@ -2708,14 +2708,85 @@
       return normalizeTaskSection(task?.dataset?.section);
     }
 
-    function getTaskDueDateValue(task) {
+    function getMoveDateKey() {
+      return normalizeDateValue(moveDateInput?.value || localStorage.getItem('txMoveMoveDate') || '');
+    }
+
+    function normalizeDueOffset(value) {
+      const parsed = Number.parseInt(String(value || '').trim(), 10);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    function getStoredDueOffset(task) {
+      return normalizeDueOffset(task?.dataset?.dueOffset);
+    }
+
+    function getDueDateFromOffset(moveDateKey, dueOffset) {
+      const normalizedMoveDate = normalizeDateValue(moveDateKey);
+      if (!normalizedMoveDate || dueOffset === null) return '';
+      return addDaysToDateKey(normalizedMoveDate, dueOffset);
+    }
+
+    function getDueOffsetFromAbsoluteDate(moveDateKey, dueDate) {
+      const normalizedMoveDate = normalizeDateValue(moveDateKey);
+      const normalizedDueDate = normalizeDateValue(dueDate);
+      if (!normalizedMoveDate || !normalizedDueDate) return null;
+
+      const parsedMoveDate = parseDateKey(normalizedMoveDate);
+      const parsedDueDate = parseDateKey(normalizedDueDate);
+      if (!parsedMoveDate || !parsedDueDate) return null;
+
+      return Math.round((parsedDueDate - parsedMoveDate) / 86400000);
+    }
+
+    function resolveTaskDueDate(task) {
+      const moveDateKey = getMoveDateKey();
       const dueInput = task?.querySelector('.task-due');
-      const value = dueInput ? dueInput.value : '';
-      if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-        return value;
+      const offset = getStoredDueOffset(task);
+      const datasetDue = normalizeDateValue(task?.dataset?.dueDate || task?.getAttribute('data-due-date') || '');
+
+      if (!moveDateKey) {
+        return normalizeDateValue(dueInput?.value || datasetDue);
       }
-      const fallback = task?.dataset?.dueDate || '';
-      return /^\d{4}-\d{2}-\d{2}$/.test(fallback) ? fallback : '9999-12-31';
+
+      if (offset !== null) {
+        const resolved = getDueDateFromOffset(moveDateKey, offset);
+        if (resolved) return resolved;
+      }
+
+      if (!datasetDue) {
+        return '';
+      }
+
+      const derivedOffset = getDueOffsetFromAbsoluteDate(moveDateKey, datasetDue);
+      if (derivedOffset === null) return datasetDue;
+      task.dataset.dueOffset = String(derivedOffset);
+      return getDueDateFromOffset(moveDateKey, derivedOffset);
+    }
+
+    function syncTaskDueDateToMoveDate(task) {
+      const dueInput = task?.querySelector('.task-due');
+      const resolvedDueDate = resolveTaskDueDate(task);
+      if (dueInput) {
+        dueInput.value = resolvedDueDate || '';
+      }
+      if (resolvedDueDate) {
+        task.dataset.dueDate = resolvedDueDate;
+      } else if (task?.dataset?.dueDate) {
+        task.dataset.dueDate = normalizeDateValue(task.dataset.dueDate);
+      }
+    }
+
+    function syncAllTaskDueDatesToMoveDate() {
+      const tasks = getAllTaskCards();
+      tasks.forEach(syncTaskDueDateToMoveDate);
+    }
+
+    function getTaskDueDateValue(task) {
+      const dueDate = resolveTaskDueDate(task);
+      if (dueDate) return dueDate;
+      const fallback = normalizeDateValue(task?.dataset?.dueDate || '');
+      return fallback || '9999-12-31';
     }
 
     function getSectionContainer(section) {
@@ -2743,9 +2814,7 @@
     }
 
     function getTaskDueDateString(task) {
-      const dueInput = task?.querySelector('.task-due');
-      const value = dueInput ? dueInput.value : (task?.dataset?.dueDate || '');
-      return normalizeDateValue(value);
+      return normalizeDateValue(resolveTaskDueDate(task));
     }
 
     function getTaskDueDiff(dueDate) {
@@ -3497,9 +3566,8 @@
       appendTaskToSection(task, section);
 
       const dueDateInput = task.querySelector('.task-due') || buildTaskMetaContainer(task);
-      const fallbackDueDate = normalizeDateValue(task.dataset.dueDate || task.dataset.due || task.getAttribute('data-due-date'));
-      if (dueDateInput && fallbackDueDate) {
-        dueDateInput.value = fallbackDueDate;
+      if (dueDateInput) {
+        syncTaskDueDateToMoveDate(task);
       }
 
       task.dataset.estimatedCost = normalizeEstimatedCost(task.dataset.estimatedCost || task.dataset.estimatedcost || '');
@@ -3572,6 +3640,8 @@
         kpiDday.textContent = dday;
       }
 
+      syncAllTaskDueDatesToMoveDate();
+
       if (save) {
         localStorage.setItem('txMoveMoveDate', dateString || '');
       }
@@ -3585,6 +3655,7 @@
         const desc = task.querySelector('.task-desc');
         const prioritySelect = task.querySelector('.task-priority');
         const section = normalizeTaskSection(task.dataset.section || getTaskSection(task));
+        const dueOffset = getStoredDueOffset(task);
         const dueDate = getTaskDueDateValue(task);
         const visitUrl = normalizeTaskUrl(task.dataset.visitUrl || task.dataset.url || task.getAttribute('data-url'));
         const estimatedCost = getTaskEstimatedCost(task);
@@ -3601,6 +3672,7 @@
           done: Boolean(checkbox?.checked),
           isCustom: task.dataset.customTask === 'true',
           section,
+          dueOffset,
           dueDate,
           visitUrl,
           estimatedCost
@@ -3617,6 +3689,7 @@
           desc: task.desc,
           priority: task.priority,
           section: task.section,
+          dueOffset: task.dueOffset,
           dueDate: task.dueDate,
           visitUrl: task.visitUrl,
           estimatedCost: normalizeEstimatedCost(task.estimatedCost),
@@ -3633,6 +3706,7 @@
       id,
       section = 'before-move',
       dueDate = '',
+      dueOffset,
       visitUrl = '',
       estimatedCost = 0
     }) {
@@ -3641,12 +3715,18 @@
       const safeDueDate = normalizeDateValue(dueDate);
       const safeVisitUrl = normalizeTaskUrl(visitUrl);
       const safeEstimatedCost = normalizeEstimatedCost(estimatedCost);
+      const safeDueOffset = normalizeDueOffset(
+        dueOffset === undefined
+          ? (safeDueDate && getDueOffsetFromAbsoluteDate(getMoveDateKey(), safeDueDate))
+          : dueOffset
+      );
       const taskEl = document.createElement('div');
       taskEl.className = 'task';
       taskEl.dataset.taskId = id || generateTaskId();
       taskEl.dataset.section = normalizeTaskSection(section);
       taskEl.dataset.priority = safePriority;
       taskEl.dataset.dueDate = safeDueDate;
+      taskEl.dataset.dueOffset = safeDueOffset !== null ? String(safeDueOffset) : '';
       taskEl.dataset.estimatedCost = safeEstimatedCost;
       taskEl.dataset.visitUrl = safeVisitUrl;
 
@@ -3681,7 +3761,7 @@
       meta.className = 'task-meta';
       meta.innerHTML = `
         <span class="task-due-label">마감일</span>
-        <input type="date" class="task-due" value="${safeDueDate}" aria-label="마감일" />
+        <input type="date" class="task-due" value="" aria-label="마감일" />
       `;
       textWrap.appendChild(meta);
 
@@ -3714,6 +3794,8 @@
       if (safeVisitUrl) {
         updateTaskVisitLink(taskEl);
       }
+
+      syncTaskDueDateToMoveDate(taskEl);
 
       updateTaskStatusBadge(taskEl);
       updateTaskCostBadge(taskEl);
@@ -3821,6 +3903,9 @@
       const section = normalizeTaskSection(state.section);
       const dueDate = normalizeDateValue(state.dueDate);
       const visitUrl = normalizeTaskUrl(state.visitUrl);
+      const stateDueOffset = Object.prototype.hasOwnProperty.call(state, 'dueOffset')
+        ? normalizeDueOffset(state.dueOffset)
+        : null;
       const estimatedCost = Object.prototype.hasOwnProperty.call(state, 'estimatedCost')
         ? normalizeEstimatedCost(state.estimatedCost)
         : normalizeEstimatedCost(task.dataset?.estimatedCost);
@@ -3846,6 +3931,11 @@
       ensureEditableTask(task);
 
       task.dataset.section = section;
+      if (stateDueOffset !== null) {
+        task.dataset.dueOffset = String(stateDueOffset);
+      } else {
+        task.dataset.dueOffset = '';
+      }
       task.dataset.estimatedCost = estimatedCost;
       task.dataset.visitUrl = visitUrl;
       appendTaskToSection(task, section);
@@ -3856,8 +3946,8 @@
 
       const dueInput = task.querySelector('.task-due');
       if (dueInput) {
-        task.dataset.dueDate = dueDate;
-        dueInput.value = dueDate || '';
+        task.dataset.dueDate = dueDate || '';
+        syncTaskDueDateToMoveDate(task);
       }
     }
 
@@ -3878,6 +3968,7 @@
           id: task.id,
           section: task.section,
           dueDate: task.dueDate,
+          dueOffset: task.dueOffset,
           visitUrl: task.visitUrl,
           estimatedCost: task.estimatedCost
         });
@@ -3974,7 +4065,17 @@
         const task = event.target.closest('.task');
         if (!task) return;
         const section = normalizeTaskSection(task.dataset.section);
-        task.dataset.dueDate = normalizeDateValue(event.target.value);
+        const nextDueDate = normalizeDateValue(event.target.value);
+        const moveDateKey = getMoveDateKey();
+        task.dataset.dueDate = nextDueDate;
+        if (moveDateKey && nextDueDate) {
+          const offset = getDueOffsetFromAbsoluteDate(moveDateKey, nextDueDate);
+          if (offset !== null) {
+            task.dataset.dueOffset = String(offset);
+          } else {
+            task.dataset.dueOffset = '';
+          }
+        }
         updateTaskStatusBadge(task);
         updateTaskDueSummary(task);
         appendTaskToSection(task, section);
@@ -4159,6 +4260,7 @@
       const dueDate = normalizeDateValue(customTaskDueDate.value);
       const visitUrl = customTaskUrl.value;
       const estimatedCost = normalizeEstimatedCost(customTaskCost.value);
+      const dueOffset = getDueOffsetFromAbsoluteDate(getMoveDateKey(), dueDate);
 
       if (!title) {
         alert('할 일 제목을 입력해 주세요.');
@@ -4173,6 +4275,7 @@
         isCustom: true,
         section,
         dueDate,
+        dueOffset,
         visitUrl,
         estimatedCost
       });
@@ -4202,6 +4305,7 @@
 
     moveDateInput.addEventListener('input', event => {
       updateMoveDate(event.target.value);
+      updateProgress();
     });
 
     notes.addEventListener('input', () => {
