@@ -939,6 +939,35 @@
       box-shadow: 0 0 0 3px rgba(198, 93, 46, 0.12);
     }
 
+    .task-cost-add {
+      min-height: 24px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(198, 93, 46, 0.35);
+      background: linear-gradient(135deg, rgba(198, 93, 46, 0.95), rgba(230, 150, 107, 0.95));
+      color: #fffaf4;
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+    }
+
+    .task-cost-add:hover {
+      transform: translateY(-1px);
+      border-color: rgba(198, 93, 46, 0.5);
+      background: linear-gradient(135deg, rgba(214, 107, 56, 0.98), rgba(247, 167, 127, 0.98));
+    }
+
+    .task-cost-wrap.empty .task-cost-input {
+      display: none;
+    }
+
+    .task-cost-wrap:not(.empty) .task-cost-add {
+      display: none;
+    }
+
     .task[data-priority="high"] {
       border-left: 8px solid rgba(194, 65, 45, 0.62);
       box-shadow:
@@ -1669,6 +1698,12 @@
       border-color: rgba(255, 238, 220, 0.16);
       background: rgba(53, 44, 37, 0.82);
       color: #fff9f2;
+    }
+
+    body[data-theme="dark"] .task-cost-add {
+      background: linear-gradient(135deg, rgba(242, 161, 120, 0.95), rgba(198, 93, 46, 0.95));
+      border-color: rgba(255, 238, 220, 0.38);
+      color: #fff7eb;
     }
 
     body[data-theme="dark"] .secondary {
@@ -3070,18 +3105,14 @@
 
       const cost = getTaskEstimatedCost(task);
       const existing = taskMeta.querySelector('.task-cost-wrap');
-      if (cost <= 0) {
-        if (existing) {
-          existing.remove();
-        }
-        return;
-      }
+      const hasCost = cost > 0;
 
       if (!existing) {
         const wrapper = document.createElement('span');
         wrapper.className = 'task-cost-wrap';
         const label = document.createElement('span');
         const input = document.createElement('input');
+        const addButton = document.createElement('button');
 
         label.className = 'task-cost-label';
         label.textContent = '예상';
@@ -3093,17 +3124,34 @@
         input.step = '0.01';
         input.setAttribute('aria-label', '예상 비용 입력');
         input.setAttribute('title', '예상 비용 수정');
+        input.addEventListener('pointerdown', event => {
+          event.stopPropagation();
+        });
+
+        addButton.className = 'task-cost-add';
+        addButton.type = 'button';
+        addButton.textContent = '비용 추가';
+        addButton.setAttribute('aria-label', '예상 비용 입력 필드 열기');
+        addButton.addEventListener('pointerdown', event => {
+          event.stopPropagation();
+        });
 
         wrapper.appendChild(label);
         wrapper.appendChild(input);
+        wrapper.appendChild(addButton);
         taskMeta.appendChild(wrapper);
       }
 
       const wrapper = existing || taskMeta.querySelector('.task-cost-wrap');
       const input = wrapper.querySelector('.task-cost-input');
+      const addButton = wrapper.querySelector('.task-cost-add');
       if (!input) return;
       const normalized = normalizeEstimatedCost(cost);
       input.value = normalized > 0 ? normalized.toString() : '';
+      if (addButton) {
+        addButton.style.display = hasCost ? 'none' : 'inline-flex';
+      }
+      wrapper.classList.toggle('empty', !hasCost);
 
       const label = wrapper.querySelector('.task-cost-label');
       if (label) {
@@ -4274,8 +4322,23 @@
         return;
       }
 
+      const addCostButton = event.target.closest('.task-cost-add');
+      if (addCostButton) {
+        const wrapper = clickedTask.querySelector('.task-cost-wrap');
+        const costInput = wrapper?.querySelector('.task-cost-input');
+        if (wrapper && costInput) {
+          wrapper.classList.remove('empty');
+          costInput.style.display = '';
+          addCostButton.style.display = 'none';
+          costInput.value = '';
+          costInput.focus();
+          costInput.select();
+        }
+        return;
+      }
+
       if (
-        event.target.closest('[data-task], .task-priority, .task-due, .task-cost-input, .task-link')
+        event.target.closest('[data-task], .task-priority, .task-due, .task-cost-input, .task-cost-add, .task-link')
       ) {
         if (event.target.closest('.task-title[contenteditable="true"], .task-desc[contenteditable="true"]')) {
           event.preventDefault();
