@@ -4,7 +4,8 @@
   "description": "Simple Express API server for Texas move planner sync",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "migrate:data": "node scripts/migrate-data.js"
   },
   "dependencies": {
     "express": "^4.19.2"
