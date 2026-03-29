@@ -570,6 +570,73 @@
       gap: 12px;
     }
 
+    .task-board {
+      display: grid;
+      gap: 16px;
+    }
+
+    .task-group {
+      display: grid;
+      gap: 12px;
+    }
+
+    .task-group-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .task-group-head h3 {
+      margin: 0;
+      font-size: 0.98rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .section-progress {
+      min-width: 180px;
+      padding: 9px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(75, 52, 27, 0.12);
+      background: rgba(255, 255, 255, 0.38);
+      font-size: 12px;
+      color: var(--muted);
+      display: grid;
+      gap: 6px;
+    }
+
+    .section-progress-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .section-progress strong {
+      color: var(--text);
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .section-progress-track {
+      width: 100%;
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(75, 52, 27, 0.12);
+      overflow: hidden;
+    }
+
+    .section-progress-fill {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #c65d2e, #f6a57a 60%, #ffd8c3);
+      transition: width 0.3s ease;
+    }
+
     .task {
       display: grid;
       grid-template-columns: auto minmax(0, 1fr) auto auto auto;
@@ -634,6 +701,33 @@
       color: var(--muted);
       pointer-events: none;
       opacity: 0.65;
+    }
+
+    .task-meta {
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .task-due-label {
+      font-weight: 800;
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    .task-due {
+      min-height: 30px;
+      border-radius: 10px;
+      border: 1px solid rgba(75, 52, 27, 0.2);
+      background: #fff;
+      padding: 0 10px;
+      color: var(--text);
+      max-width: 180px;
+      min-width: 156px;
     }
 
     .tag {
@@ -1515,96 +1609,179 @@
           </div>
         </div>
 
-        <div class="checklist" id="taskList">
-          <label class="task">
-            <input type="checkbox" data-task />
-            <div>
-              <div class="task-title">클로징 일정과 준비물 최종 확인</div>
-              <div class="task-desc">클로징 날짜, 장소, 필요한 ID, 자금 이체 방식, 최종 서류를 다시 확인.</div>
+        <div class="task-board" id="taskList">
+          <section class="task-group">
+            <div class="task-group-head">
+              <h3>Before Move</h3>
+              <div class="section-progress">
+                <div class="section-progress-row">
+                  <span>Progress</span>
+                  <strong id="beforeMoveProgressText">0 / 0 완료</strong>
+                </div>
+                <div class="section-progress-track">
+                  <div class="section-progress-fill" id="beforeMoveProgress"></div>
+                </div>
+              </div>
             </div>
-            <span class="tag high">급함</span>
-          </label>
+            <div class="checklist" data-task-section="before-move">
+              <label class="task" data-section="before-move" data-due-date="2026-08-15">
+                <input type="checkbox" data-task />
+                <div>
+                  <div class="task-title">클로징 일정과 준비물 최종 확인</div>
+                  <div class="task-desc">클로징 날짜, 장소, 필요한 ID, 자금 이체 방식, 최종 서류를 다시 확인.</div>
+                  <div class="task-meta">
+                    <span class="task-due-label">마감일</span>
+                    <input type="date" class="task-due" value="2026-08-15" aria-label="마감일" />
+                  </div>
+                </div>
+                <span class="tag high">급함</span>
+              </label>
+              <label class="task" data-section="before-move" data-due-date="2026-08-18">
+                <input type="checkbox" data-task />
+                <div>
+                  <div class="task-title">주택 보험 연결 및 대출 쪽 전달</div>
+                  <div class="task-desc">새 집 보험 바인드 후 lender와 builder 측에서 문제 없이 수령했는지 체크.</div>
+                  <div class="task-meta">
+                    <span class="task-due-label">마감일</span>
+                    <input type="date" class="task-due" value="2026-08-18" aria-label="마감일" />
+                  </div>
+                </div>
+                <span class="tag high">급함</span>
+              </label>
+              <label class="task" data-section="before-move" data-due-date="2026-08-20">
+                <input type="checkbox" data-task />
+                <div>
+                  <div class="task-title">현재 집 정리 / 판매 준비</div>
+                  <div class="task-desc">정리, 사진, 청소, 수리, 스테이징, 리스팅 일정까지 한 번에 맞추기.</div>
+                  <div class="task-meta">
+                    <span class="task-due-label">마감일</span>
+                    <input type="date" class="task-due" value="2026-08-20" aria-label="마감일" />
+                  </div>
+                </div>
+                <span class="tag mid">중요</span>
+              </label>
+              <label class="task" data-section="before-move" data-due-date="2026-08-23">
+                <input type="checkbox" data-task />
+                <div>
+                  <div class="task-title">이삿짐 분류: 가져갈 것 / 버릴 것 / 판매할 것</div>
+                  <div class="task-desc">큰 가전, 침대, 박스, TV, 탁구대 등 실제 이동 품목을 먼저 확정.</div>
+                  <div class="task-meta">
+                    <span class="task-due-label">마감일</span>
+                    <input type="date" class="task-due" value="2026-08-23" aria-label="마감일" />
+                  </div>
+                </div>
+                <span class="tag mid">중요</span>
+              </label>
+              <label class="task" data-section="before-move" data-due-date="2026-08-25">
+                <input type="checkbox" data-task />
+                <div>
+                  <div class="task-title">차량 이동 계획 확정</div>
+                  <div class="task-desc">1대 운송, 1대 직접 운전 여부와 인수 및 반납 날짜를 정리.</div>
+                  <div class="task-meta">
+                    <span class="task-due-label">마감일</span>
+                    <input type="date" class="task-due" value="2026-08-25" aria-label="마감일" />
+                  </div>
+                </div>
+                <span class="tag mid">중요</span>
+              </label>
+            </div>
+          </section>
 
-          <label class="task">
-            <input type="checkbox" data-task />
-            <div>
-              <div class="task-title">주택 보험 연결 및 대출 쪽 전달</div>
-              <div class="task-desc">새 집 보험 바인드 후 lender와 builder 측에서 문제 없이 수령했는지 체크.</div>
+          <section class="task-group">
+            <div class="task-group-head">
+              <h3>Moving Week</h3>
+              <div class="section-progress">
+                <div class="section-progress-row">
+                  <span>Progress</span>
+                  <strong id="movingWeekProgressText">0 / 0 완료</strong>
+                </div>
+                <div class="section-progress-track">
+                  <div class="section-progress-fill" id="movingWeekProgress"></div>
+                </div>
+              </div>
             </div>
-            <span class="tag high">급함</span>
-          </label>
+            <div class="checklist" data-task-section="moving-week">
+              <label class="task" data-section="moving-week" data-due-date="2026-08-28">
+                <input type="checkbox" data-task />
+                <div>
+                  <div class="task-title">고양이 이동 세팅 준비</div>
+                  <div class="task-desc">이동장, 물, 화장실, 쉬는 공간, 탈출 방지 커버 등 세부 준비물 점검.</div>
+                  <div class="task-meta">
+                    <span class="task-due-label">마감일</span>
+                    <input type="date" class="task-due" value="2026-08-28" aria-label="마감일" />
+                  </div>
+                </div>
+                <span class="tag mid">중요</span>
+              </label>
+              <label class="task" data-section="moving-week" data-due-date="2026-09-01">
+                <input type="checkbox" data-task />
+                <div>
+                  <div class="task-title">텍사스 유틸리티 예약</div>
+                  <div class="task-desc">전기, 수도, 인터넷, 쓰레기 서비스 시작일을 입주일에 맞추기.</div>
+                  <div class="task-meta">
+                    <span class="task-due-label">마감일</span>
+                    <input type="date" class="task-due" value="2026-09-01" aria-label="마감일" />
+                  </div>
+                </div>
+                <span class="tag high">급함</span>
+              </label>
+            </div>
+          </section>
 
-          <label class="task">
-            <input type="checkbox" data-task />
-            <div>
-              <div class="task-title">현재 집 정리 / 판매 준비</div>
-              <div class="task-desc">정리, 사진, 청소, 수리, 스테이징, 리스팅 일정까지 한 번에 맞추기.</div>
+          <section class="task-group">
+            <div class="task-group-head">
+              <h3>After Move</h3>
+              <div class="section-progress">
+                <div class="section-progress-row">
+                  <span>Progress</span>
+                  <strong id="afterMoveProgressText">0 / 0 완료</strong>
+                </div>
+                <div class="section-progress-track">
+                  <div class="section-progress-fill" id="afterMoveProgress"></div>
+                </div>
+              </div>
             </div>
-            <span class="tag mid">중요</span>
-          </label>
+            <div class="checklist" data-task-section="after-move">
+              <label class="task" data-section="after-move" data-due-date="2026-09-03">
+                <input type="checkbox" data-task />
+                <div>
+                  <div class="task-title">주소 변경 / 우편 포워딩</div>
+                  <div class="task-desc">은행, 보험, DMV, 카드, 병원, 각종 계정 주소를 한 번에 업데이트.</div>
+                  <div class="task-meta">
+                    <span class="task-due-label">마감일</span>
+                    <input type="date" class="task-due" value="2026-09-03" aria-label="마감일" />
+                  </div>
+                </div>
+                <span class="tag low">일반</span>
+              </label>
 
-          <label class="task">
-            <input type="checkbox" data-task />
-            <div>
-              <div class="task-title">이삿짐 분류: 가져갈 것 / 버릴 것 / 판매할 것</div>
-              <div class="task-desc">큰 가전, 침대, 박스, TV, 탁구대 등 실제 이동 품목을 먼저 확정.</div>
-            </div>
-            <span class="tag mid">중요</span>
-          </label>
+              <label class="task" data-section="after-move" data-due-date="2026-09-04">
+                <input type="checkbox" data-task />
+                <div>
+                  <div class="task-title">텍사스 DMV / 번호판 / 면세 신청 계획 세우기</div>
+                  <div class="task-desc">운전면허, 차량 등록, 번호판, 재산세 관련 일정과 순서를 체크.</div>
+                  <div class="task-meta">
+                    <span class="task-due-label">마감일</span>
+                    <input type="date" class="task-due" value="2026-09-04" aria-label="마감일" />
+                  </div>
+                </div>
+                <span class="tag mid">중요</span>
+              </label>
 
-          <label class="task">
-            <input type="checkbox" data-task />
-            <div>
-              <div class="task-title">차량 이동 계획 확정</div>
-              <div class="task-desc">1대 운송, 1대 직접 운전 여부와 인수 및 반납 날짜를 정리.</div>
+              <label class="task" data-section="after-move" data-due-date="2026-09-06">
+                <input type="checkbox" data-task />
+                <div>
+                  <div class="task-title">입주 첫날 필수품 가방 따로 준비</div>
+                  <div class="task-desc">충전기, 약, 서류, 고양이 용품, 세면도구, 옷 2~3벌은 따로 보관.</div>
+                  <div class="task-meta">
+                    <span class="task-due-label">마감일</span>
+                    <input type="date" class="task-due" value="2026-09-06" aria-label="마감일" />
+                  </div>
+                </div>
+                <span class="tag low">일반</span>
+              </label>
             </div>
-            <span class="tag mid">중요</span>
-          </label>
-
-          <label class="task">
-            <input type="checkbox" data-task />
-            <div>
-              <div class="task-title">고양이 이동 세팅 준비</div>
-              <div class="task-desc">이동장, 물, 화장실, 쉬는 공간, 탈출 방지 커버 등 세부 준비물 점검.</div>
-            </div>
-            <span class="tag mid">중요</span>
-          </label>
-
-          <label class="task">
-            <input type="checkbox" data-task />
-            <div>
-              <div class="task-title">텍사스 유틸리티 예약</div>
-              <div class="task-desc">전기, 수도, 인터넷, 쓰레기 서비스 시작일을 입주일에 맞추기.</div>
-            </div>
-            <span class="tag high">급함</span>
-          </label>
-
-          <label class="task">
-            <input type="checkbox" data-task />
-            <div>
-              <div class="task-title">주소 변경 / 우편 포워딩</div>
-              <div class="task-desc">은행, 보험, DMV, 카드, 병원, 각종 계정 주소를 한 번에 업데이트.</div>
-            </div>
-            <span class="tag low">일반</span>
-          </label>
-
-          <label class="task">
-            <input type="checkbox" data-task />
-            <div>
-              <div class="task-title">텍사스 DMV / 번호판 / 면세 신청 계획 세우기</div>
-              <div class="task-desc">운전면허, 차량 등록, 번호판, 재산세 관련 일정과 순서를 체크.</div>
-            </div>
-            <span class="tag mid">중요</span>
-          </label>
-
-          <label class="task">
-            <input type="checkbox" data-task />
-            <div>
-              <div class="task-title">입주 첫날 필수품 가방 따로 준비</div>
-              <div class="task-desc">충전기, 약, 서류, 고양이 용품, 세면도구, 옷 2~3벌은 따로 보관.</div>
-            </div>
-            <span class="tag low">일반</span>
-          </label>
+          </section>
         </div>
 
         <div class="add-task-panel">
@@ -1622,6 +1799,18 @@
                 <option value="mid" selected>중요</option>
                 <option value="low">일반</option>
               </select>
+            </label>
+            <label class="field">
+              <span>이사 단계</span>
+              <select id="customTaskSection">
+                <option value="before-move">Before Move</option>
+                <option value="moving-week">Moving Week</option>
+                <option value="after-move">After Move</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>마감일</span>
+              <input id="customTaskDueDate" type="date" />
             </label>
 
             <label class="field field-full">
@@ -1817,6 +2006,8 @@
     const customTaskTitle = document.getElementById('customTaskTitle');
     const customTaskDesc = document.getElementById('customTaskDesc');
     const customTaskPriority = document.getElementById('customTaskPriority');
+    const customTaskSection = document.getElementById('customTaskSection');
+    const customTaskDueDate = document.getElementById('customTaskDueDate');
     const addTaskBtn = document.getElementById('addTaskBtn');
     const prevScheduleMonthBtn = document.getElementById('prevScheduleMonth');
     const nextScheduleMonthBtn = document.getElementById('nextScheduleMonth');
@@ -1840,11 +2031,38 @@
     const budgetHero = document.getElementById('budgetHero');
     const exportBtn = document.getElementById('exportBtn');
     const resetBtn = document.getElementById('resetBtn');
+    const beforeMoveProgressText = document.getElementById('beforeMoveProgressText');
+    const beforeMoveProgress = document.getElementById('beforeMoveProgress');
+    const movingWeekProgressText = document.getElementById('movingWeekProgressText');
+    const movingWeekProgress = document.getElementById('movingWeekProgress');
+    const afterMoveProgressText = document.getElementById('afterMoveProgressText');
+    const afterMoveProgress = document.getElementById('afterMoveProgress');
+    const beforeMoveList = document.querySelector('[data-task-section="before-move"]');
+    const movingWeekList = document.querySelector('[data-task-section="moving-week"]');
+    const afterMoveList = document.querySelector('[data-task-section="after-move"]');
 
     const priorityMeta = {
       high: { text: '급함', className: 'high', rank: 0 },
       mid: { text: '중요', className: 'mid', rank: 1 },
       low: { text: '일반', className: 'low', rank: 2 }
+    };
+    const taskSectionKeys = ['before-move', 'moving-week', 'after-move'];
+    const sectionProgressMap = {
+      'before-move': {
+        container: beforeMoveList,
+        progressText: beforeMoveProgressText,
+        bar: beforeMoveProgress
+      },
+      'moving-week': {
+        container: movingWeekList,
+        progressText: movingWeekProgressText,
+        bar: movingWeekProgress
+      },
+      'after-move': {
+        container: afterMoveList,
+        progressText: afterMoveProgressText,
+        bar: afterMoveProgress
+      }
     };
     const today = new Date();
     let scheduleCursorDate = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -1950,6 +2168,111 @@
       googleConnectBtn.textContent = googleCalendarConnected ? '구글 캘린더 다시 연결' : '구글 캘린더 연결';
       googleSyncBtn.disabled = !googleCalendarConnected;
       googleDisconnectBtn.hidden = !googleCalendarConnected;
+    }
+
+    function normalizeTaskSection(section) {
+      return taskSectionKeys.includes(section) ? section : 'before-move';
+    }
+
+    function getTaskSection(task) {
+      return normalizeTaskSection(task?.dataset?.section);
+    }
+
+    function getTaskDueDateValue(task) {
+      const dueInput = task?.querySelector('.task-due');
+      const value = dueInput ? dueInput.value : '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return value;
+      }
+      const fallback = task?.dataset?.dueDate || '';
+      return /^\d{4}-\d{2}-\d{2}$/.test(fallback) ? fallback : '9999-12-31';
+    }
+
+    function getSectionContainer(section) {
+      const normalized = normalizeTaskSection(section);
+      return sectionProgressMap[normalized]?.container || beforeMoveList;
+    }
+
+    function normalizeDateValue(value) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(value || '')) {
+        return value;
+      }
+      return '';
+    }
+
+    function buildTaskMetaContainer(task) {
+      const titleOrContainer = task.querySelector(':scope > div');
+      if (!titleOrContainer) return null;
+
+      let meta = titleOrContainer.querySelector('.task-meta');
+      if (!meta) {
+        meta = document.createElement('div');
+        meta.className = 'task-meta';
+      } else {
+        const existing = meta.querySelector('.task-due');
+        if (!existing) {
+          meta.innerHTML = '';
+        }
+      }
+
+      meta.innerHTML = `
+        <span class="task-due-label">마감일</span>
+        <input type="date" class="task-due" value="" aria-label="마감일" />
+      `;
+      const fallback = titleOrContainer.querySelector('.task-desc');
+      if (fallback && titleOrContainer.contains(fallback)) {
+        fallback.insertAdjacentElement('afterend', meta);
+      } else {
+        const title = titleOrContainer.querySelector('.task-title');
+        if (title && title.parentElement === titleOrContainer) {
+          title.insertAdjacentElement('afterend', meta);
+        } else {
+          titleOrContainer.appendChild(meta);
+        }
+      }
+
+      const dueInput = meta.querySelector('.task-due');
+      return dueInput;
+    }
+
+    function appendTaskToSection(task, section) {
+      const container = getSectionContainer(section);
+      if (!container) return;
+      container.appendChild(task);
+      task.dataset.section = normalizeTaskSection(section);
+    }
+
+    function compareTaskOrder(a, b) {
+      const dueA = getTaskDueDateValue(a);
+      const dueB = getTaskDueDateValue(b);
+      if (dueA !== dueB) {
+        return dueA.localeCompare(dueB);
+      }
+
+      const prioA = priorityMeta[getTaskPriority(a)]?.rank ?? 1;
+      const prioB = priorityMeta[getTaskPriority(b)]?.rank ?? 1;
+      if (prioA !== prioB) {
+        return prioA - prioB;
+      }
+
+      const aText = a.querySelector('.task-title')?.textContent?.trim() || '';
+      const bText = b.querySelector('.task-title')?.textContent?.trim() || '';
+      return aText.localeCompare(bText);
+    }
+
+    function sortTasksInSection(sectionKey) {
+      const container = getSectionContainer(sectionKey);
+      if (!container) return;
+
+      const tasks = [...container.querySelectorAll('.task')].filter(node => taskList.contains(node));
+      const sorted = tasks.slice().sort(compareTaskOrder);
+      sorted.forEach(task => {
+        container.appendChild(task);
+      });
+    }
+
+    function sortAllTaskSections() {
+      taskSectionKeys.forEach(sortTasksInSection);
     }
 
     function getTaskInputs() {
@@ -2408,6 +2731,16 @@
         prioritySelect.value = currentPriority;
         task.appendChild(prioritySelect);
       }
+
+      const section = normalizeTaskSection(task.dataset.section);
+      task.dataset.section = section;
+      appendTaskToSection(task, section);
+
+      const dueDateInput = task.querySelector('.task-due') || buildTaskMetaContainer(task);
+      const fallbackDueDate = normalizeDateValue(task.dataset.dueDate || task.dataset.due || task.getAttribute('data-due-date'));
+      if (dueDateInput && fallbackDueDate) {
+        dueDateInput.value = fallbackDueDate;
+      }
     }
 
     function formatCountLabel(value) {
@@ -2480,7 +2813,10 @@
         const title = task.querySelector('.task-title');
         const desc = task.querySelector('.task-desc');
         const prioritySelect = task.querySelector('.task-priority');
+        const section = normalizeTaskSection(task.dataset.section || getTaskSection(task));
+        const dueDate = getTaskDueDateValue(task);
         task.dataset.taskId = id;
+        task.dataset.section = section;
 
         return {
           id,
@@ -2488,7 +2824,9 @@
           desc: normalizeTaskText(desc?.textContent || ''),
           priority: prioritySelect && prioritySelect.value ? prioritySelect.value : getTaskPriority(task),
           done: Boolean(checkbox?.checked),
-          isCustom: task.dataset.customTask === 'true'
+          isCustom: task.dataset.customTask === 'true',
+          section,
+          dueDate
         };
       });
 
@@ -2500,17 +2838,31 @@
           id: task.id,
           title: task.title,
           desc: task.desc,
-          priority: task.priority
+          priority: task.priority,
+          section: task.section,
+          dueDate: task.dueDate,
+          done: task.done
         })))
       );
     }
 
-    function createTaskElement({ title, desc, priority = 'mid', isCustom = false, id }) {
+    function createTaskElement({
+      title,
+      desc,
+      priority = 'mid',
+      isCustom = false,
+      id,
+      section = 'before-move',
+      dueDate = ''
+    }) {
       const safePriority = priorityMeta[priority] ? priority : 'mid';
       const tagMeta = priorityMeta[safePriority];
+      const safeDueDate = normalizeDateValue(dueDate);
       const taskEl = document.createElement('div');
       taskEl.className = 'task';
       taskEl.dataset.taskId = id || generateTaskId();
+      taskEl.dataset.section = normalizeTaskSection(section);
+      taskEl.dataset.dueDate = safeDueDate;
 
       if (isCustom) {
         taskEl.dataset.customTask = 'true';
@@ -2538,6 +2890,14 @@
         descDiv.textContent = desc;
         textWrap.appendChild(descDiv);
       }
+
+      const meta = document.createElement('div');
+      meta.className = 'task-meta';
+      meta.innerHTML = `
+        <span class="task-due-label">마감일</span>
+        <input type="date" class="task-due" value="${safeDueDate}" aria-label="마감일" />
+      `;
+      textWrap.appendChild(meta);
 
       const tag = document.createElement('span');
       tag.className = `tag ${tagMeta.className}`;
@@ -2569,6 +2929,8 @@
     }
 
     function updateProgress() {
+      sortAllTaskSections();
+
       const taskInputs = getTaskInputs();
       const tasks = [...taskList.querySelectorAll('.task')];
       const done = taskInputs.filter(input => input.checked).length;
@@ -2583,11 +2945,28 @@
 
       const pendingTasks = tasks
         .filter(task => !task.querySelector('[data-task]')?.checked)
-        .sort((a, b) => priorityMeta[getTaskPriority(a)].rank - priorityMeta[getTaskPriority(b)].rank);
+        .sort((a, b) => {
+          const priorityResult = priorityMeta[getTaskPriority(a)].rank - priorityMeta[getTaskPriority(b)].rank;
+          if (priorityResult !== 0) return priorityResult;
+          return compareTaskOrder(a, b);
+        });
 
       const pendingUrgentCount = pendingTasks.filter(task => getTaskPriority(task) === 'high').length;
       const nextTaskTitle = pendingTasks[0]?.querySelector('.task-title')?.textContent?.trim() || '모든 핵심 항목 완료';
       const shortNextTask = nextTaskTitle.length > 10 ? `${nextTaskTitle.slice(0, 10)}...` : nextTaskTitle;
+
+      taskSectionKeys.forEach(sectionKey => {
+        const tasksInSection = Array.from(
+          getSectionContainer(sectionKey).querySelectorAll('.task')
+        ).filter(task => taskList.contains(task));
+        const doneInSection = tasksInSection.filter(task => task.querySelector('[data-task]')?.checked).length;
+        const totalInSection = tasksInSection.length;
+        const sectionText = `${doneInSection} / ${totalInSection} 완료`;
+        const sectionPercent = totalInSection ? (doneInSection / totalInSection) * 100 : 0;
+
+        sectionProgressMap[sectionKey].progressText.textContent = sectionText;
+        sectionProgressMap[sectionKey].bar.style.width = `${Math.round(sectionPercent)}%`;
+      });
 
       progressText.textContent = `${percent}%`;
       progressSub.textContent = `${done} / ${total} 완료`;
@@ -2620,67 +2999,100 @@
       localStorage.setItem('txMoveBudget', JSON.stringify(budgetState));
     }
 
+    function applyTaskStateToTask(task, state) {
+      if (!task || !state) return;
+
+      const section = normalizeTaskSection(state.section);
+      const dueDate = normalizeDateValue(state.dueDate);
+      const title = task.querySelector('.task-title');
+      const desc = task.querySelector('.task-desc');
+      const checkbox = task.querySelector('[data-task]');
+
+      if (title && typeof state.title === 'string') {
+        title.textContent = state.title;
+      }
+      if (desc && typeof state.desc === 'string') {
+        desc.textContent = state.desc;
+      }
+
+      if (checkbox) {
+        checkbox.checked = Boolean(state.done);
+      }
+
+      if (state.priority) {
+        setTaskPriority(task, state.priority);
+      }
+
+      ensureEditableTask(task);
+
+      task.dataset.section = section;
+      appendTaskToSection(task, section);
+
+      const dueInput = task.querySelector('.task-due');
+      if (dueInput) {
+        task.dataset.dueDate = dueDate;
+        dueInput.value = dueDate || '';
+      }
+    }
+
     function loadState() {
       const savedTaskState = getSavedTaskState();
       const hasSavedTaskState = savedTaskState.size > 0;
       const savedCustomTasks = JSON.parse(localStorage.getItem('txMoveCustomTasks') || '[]');
+      const allTasks = [...taskList.querySelectorAll('.task')];
+      const existingIds = new Set(allTasks.map(task => task.dataset.taskId).filter(Boolean));
 
-      if (!hasSavedTaskState) {
-        savedCustomTasks.forEach(task => {
-          const customTask = createTaskElement({
-            title: task.title,
-            desc: task.desc,
-            priority: task.priority,
-            isCustom: true,
-            id: task.id
-          });
-          taskList.appendChild(customTask);
+      savedCustomTasks.forEach(task => {
+        if (!task?.id || existingIds.has(task.id)) return;
+        const customTask = createTaskElement({
+          title: task.title,
+          desc: task.desc,
+          priority: task.priority,
+          isCustom: true,
+          id: task.id,
+          section: task.section,
+          dueDate: task.dueDate
         });
-      } else {
-        const existingTaskIds = new Set([...taskList.querySelectorAll('.task')].map(task => task.dataset.taskId));
-        savedCustomTasks.forEach(task => {
-          if (!task.id || existingTaskIds.has(task.id)) return;
-          const customTask = createTaskElement({
-            title: task.title,
-            desc: task.desc,
-            priority: task.priority,
-            isCustom: true,
-            id: task.id
-          });
-          taskList.appendChild(customTask);
-          existingTaskIds.add(task.id);
-        });
-      }
+        appendTaskToSection(customTask, task.section);
+        allTasks.push(customTask);
+        existingIds.add(task.id);
+      });
+
+      allTasks.forEach(task => ensureEditableTask(task));
 
       if (hasSavedTaskState) {
-        [...taskList.querySelectorAll('.task')].forEach((task, index) => {
+        allTasks.forEach(task => {
           if (!task.dataset.taskId) {
-            task.dataset.taskId = `task-default-${String(index + 1).padStart(2, '0')}`;
+            task.dataset.taskId = generateTaskId();
           }
-          ensureEditableTask(task);
+
           const state = savedTaskState.get(task.dataset.taskId);
           if (!state) return;
-
-          const title = task.querySelector('.task-title');
-          const desc = task.querySelector('.task-desc');
-          if (title && typeof state.title === 'string') {
-            title.textContent = state.title;
-          }
-          if (desc && typeof state.desc === 'string') {
-            desc.textContent = state.desc;
-          }
-          setTaskPriority(task, state.priority);
-          task.querySelector('[data-task]').checked = Boolean(state.done);
+          applyTaskStateToTask(task, state);
         });
       } else {
         const savedTasks = JSON.parse(localStorage.getItem('txMoveTasks') || '[]');
+        const customById = new Map(Array.isArray(savedCustomTasks) ? savedCustomTasks.map(task => [task.id, task]) : []);
+
         const taskInputs = getTaskInputs();
         taskInputs.forEach((input, index) => {
           input.checked = Boolean(savedTasks[index]);
         });
 
-        [...taskList.querySelectorAll('.task')].forEach(task => {
-          ensureEditableTask(task);
+        allTasks.forEach(task => {
+          if (task.dataset.customTask !== 'true') {
+            return;
+          }
+          const customState = customById.get(task.dataset.taskId);
+          const checkbox = task.querySelector('[data-task]');
+          if (checkbox && customState) {
+            checkbox.checked = Boolean(customState.done);
+          }
+        });
+
+        allTasks.forEach(task => {
+          task.dataset.section = normalizeTaskSection(task.dataset.section || 'before-move');
+          appendTaskToSection(task, task.dataset.section);
         });
       }
 
@@ -2728,6 +3140,28 @@
     }
 
     taskList.addEventListener('change', event => {
+      if (event.target.matches('.task-due')) {
+        const task = event.target.closest('.task');
+        if (!task) return;
+        const section = normalizeTaskSection(task.dataset.section);
+        task.dataset.dueDate = normalizeDateValue(event.target.value);
+        appendTaskToSection(task, section);
+        sortTasksInSection(section);
+        persistTaskState();
+        updateProgress();
+        return;
+      }
+
+      if (event.target.matches('.task-priority')) {
+        const task = event.target.closest('.task');
+        if (!task) return;
+        setTaskPriority(task, event.target.value);
+        sortAllTaskSections();
+        persistTaskState();
+        updateProgress();
+        return;
+      }
+
       if (event.target.matches('[data-task]')) {
         updateProgress();
       }
@@ -2775,16 +3209,6 @@
       document.execCommand('insertText', false, sanitized);
     });
 
-    taskList.addEventListener('change', event => {
-      if (event.target.matches('.task-priority')) {
-        const task = event.target.closest('.task');
-        if (!task) return;
-        setTaskPriority(task, event.target.value);
-        persistTaskState();
-        updateProgress();
-      }
-    });
-
     taskList.addEventListener('click', event => {
       const removeBtn = event.target.closest('[data-remove-custom]');
       if (!removeBtn) return;
@@ -2803,7 +3227,7 @@
       }
 
       if (
-        event.target.closest('[data-task], .task-priority, .task-title[contenteditable="true"], .task-desc[contenteditable="true"]')
+        event.target.closest('[data-task], .task-priority, .task-due, .task-remove, .task-title[contenteditable="true"], .task-desc[contenteditable="true"]')
       ) {
         if (event.target.closest('.task-title[contenteditable="true"], .task-desc[contenteditable="true"]')) {
           event.preventDefault();
@@ -2892,6 +3316,8 @@
       const title = customTaskTitle.value.trim();
       const desc = customTaskDesc.value.trim();
       const priority = customTaskPriority.value;
+      const section = normalizeTaskSection(customTaskSection.value);
+      const dueDate = normalizeDateValue(customTaskDueDate.value);
 
       if (!title) {
         alert('할 일 제목을 입력해 주세요.');
@@ -2899,12 +3325,21 @@
         return;
       }
 
-      const customTask = createTaskElement({ title, desc, priority, isCustom: true });
-      taskList.appendChild(customTask);
+      const customTask = createTaskElement({
+        title,
+        desc,
+        priority,
+        isCustom: true,
+        section,
+        dueDate
+      });
+      appendTaskToSection(customTask, section);
+      sortTasksInSection(section);
 
       customTaskTitle.value = '';
       customTaskDesc.value = '';
       customTaskPriority.value = 'mid';
+      customTaskDueDate.value = '';
 
       persistTaskState();
       updateProgress();
