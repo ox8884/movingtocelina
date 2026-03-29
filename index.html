@@ -639,7 +639,7 @@
 
     .task {
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+      grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
       align-items: start;
       gap: 12px;
       padding: 16px;
@@ -780,6 +780,29 @@
       font-size: 12px;
       font-weight: 800;
       cursor: pointer;
+    }
+
+    .task-link {
+      align-self: center;
+      justify-self: end;
+      min-height: 30px;
+      padding: 0 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(75, 52, 27, 0.16);
+      background: rgba(255, 255, 255, 0.92);
+      color: var(--accent-strong);
+      font-size: 11px;
+      font-weight: 800;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .task-link:hover {
+      background: rgba(255, 255, 255, 1);
+      border-color: rgba(75, 52, 27, 0.28);
     }
 
     .task-priority {
@@ -1672,7 +1695,7 @@
                 </div>
                 <span class="tag mid">중요</span>
               </label>
-              <label class="task" data-section="before-move" data-due-date="2026-08-25">
+              <label class="task" data-section="before-move" data-due-date="2026-08-25" data-url="https://www.ntta.com/toll-tag">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">차량 이동 계획 확정</div>
@@ -1713,7 +1736,7 @@
                 </div>
                 <span class="tag mid">중요</span>
               </label>
-              <label class="task" data-section="moving-week" data-due-date="2026-09-01">
+              <label class="task" data-section="moving-week" data-due-date="2026-09-01" data-url="https://www.powertochoose.org">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">텍사스 유틸리티 예약</div>
@@ -1742,7 +1765,7 @@
               </div>
             </div>
             <div class="checklist" data-task-section="after-move">
-              <label class="task" data-section="after-move" data-due-date="2026-09-03">
+              <label class="task" data-section="after-move" data-due-date="2026-09-03" data-url="https://www.usps.com/manage/forward.htm">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">주소 변경 / 우편 포워딩</div>
@@ -1755,7 +1778,7 @@
                 <span class="tag low">일반</span>
               </label>
 
-              <label class="task" data-section="after-move" data-due-date="2026-09-04">
+              <label class="task" data-section="after-move" data-due-date="2026-09-04" data-url="https://public.txdmv.gov/">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">텍사스 DMV / 번호판 / 면세 신청 계획 세우기</div>
@@ -1811,6 +1834,10 @@
             <label class="field">
               <span>마감일</span>
               <input id="customTaskDueDate" type="date" />
+            </label>
+            <label class="field">
+              <span>바로가기 링크(선택)</span>
+              <input id="customTaskUrl" type="url" placeholder="예: https://www.example.com" />
             </label>
 
             <label class="field field-full">
@@ -2008,6 +2035,7 @@
     const customTaskPriority = document.getElementById('customTaskPriority');
     const customTaskSection = document.getElementById('customTaskSection');
     const customTaskDueDate = document.getElementById('customTaskDueDate');
+    const customTaskUrl = document.getElementById('customTaskUrl');
     const addTaskBtn = document.getElementById('addTaskBtn');
     const prevScheduleMonthBtn = document.getElementById('prevScheduleMonth');
     const nextScheduleMonthBtn = document.getElementById('nextScheduleMonth');
@@ -2200,6 +2228,19 @@
       return '';
     }
 
+    function normalizeTaskUrl(value) {
+      const trimmed = (value || '').trim();
+      if (!trimmed) return '';
+      if (/^https?:\/\//i.test(trimmed) || /^mailto:/i.test(trimmed) || /^tel:/i.test(trimmed)) {
+        return trimmed;
+      }
+      try {
+        return new URL(`https://${trimmed}`).href;
+      } catch {
+        return '';
+      }
+    }
+
     function buildTaskMetaContainer(task) {
       const titleOrContainer = task.querySelector(':scope > div');
       if (!titleOrContainer) return null;
@@ -2233,6 +2274,37 @@
 
       const dueInput = meta.querySelector('.task-due');
       return dueInput;
+    }
+
+    function getTaskLink(task) {
+      return normalizeTaskUrl(
+        task?.dataset?.visitUrl || task?.dataset?.url || task?.getAttribute('data-url')
+      );
+    }
+
+    function updateTaskVisitLink(task) {
+      const taskUrl = getTaskLink(task);
+      const existingLink = task.querySelector('.task-link');
+      if (!taskUrl) {
+        if (existingLink) {
+          existingLink.remove();
+        }
+        return;
+      }
+
+      if (existingLink) {
+        existingLink.href = taskUrl;
+        return;
+      }
+
+      const link = document.createElement('a');
+      link.className = 'task-link';
+      link.textContent = '바로가기';
+      link.href = taskUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.setAttribute('aria-label', '바로가기 열기');
+      task.appendChild(link);
     }
 
     function appendTaskToSection(task, section) {
@@ -2741,6 +2813,10 @@
       if (dueDateInput && fallbackDueDate) {
         dueDateInput.value = fallbackDueDate;
       }
+
+      const rawUrl = normalizeTaskUrl(task.dataset.url || task.getAttribute('data-url'));
+      task.dataset.url = rawUrl;
+      updateTaskVisitLink(task);
     }
 
     function formatCountLabel(value) {
@@ -2815,8 +2891,10 @@
         const prioritySelect = task.querySelector('.task-priority');
         const section = normalizeTaskSection(task.dataset.section || getTaskSection(task));
         const dueDate = getTaskDueDateValue(task);
+        const visitUrl = normalizeTaskUrl(task.dataset.visitUrl || task.dataset.url || task.getAttribute('data-url'));
         task.dataset.taskId = id;
         task.dataset.section = section;
+        task.dataset.visitUrl = visitUrl;
 
         return {
           id,
@@ -2826,7 +2904,8 @@
           done: Boolean(checkbox?.checked),
           isCustom: task.dataset.customTask === 'true',
           section,
-          dueDate
+          dueDate,
+          visitUrl
         };
       });
 
@@ -2841,6 +2920,7 @@
           priority: task.priority,
           section: task.section,
           dueDate: task.dueDate,
+          visitUrl: task.visitUrl,
           done: task.done
         })))
       );
@@ -2853,16 +2933,19 @@
       isCustom = false,
       id,
       section = 'before-move',
-      dueDate = ''
+      dueDate = '',
+      visitUrl = ''
     }) {
       const safePriority = priorityMeta[priority] ? priority : 'mid';
       const tagMeta = priorityMeta[safePriority];
       const safeDueDate = normalizeDateValue(dueDate);
+      const safeVisitUrl = normalizeTaskUrl(visitUrl);
       const taskEl = document.createElement('div');
       taskEl.className = 'task';
       taskEl.dataset.taskId = id || generateTaskId();
       taskEl.dataset.section = normalizeTaskSection(section);
       taskEl.dataset.dueDate = safeDueDate;
+      taskEl.dataset.visitUrl = safeVisitUrl;
 
       if (isCustom) {
         taskEl.dataset.customTask = 'true';
@@ -2923,6 +3006,10 @@
         removeBtn.setAttribute('data-remove-custom', '');
         removeBtn.setAttribute('aria-label', `${title} 삭제`);
         taskEl.appendChild(removeBtn);
+      }
+
+      if (safeVisitUrl) {
+        updateTaskVisitLink(taskEl);
       }
 
       return taskEl;
@@ -3004,6 +3091,7 @@
 
       const section = normalizeTaskSection(state.section);
       const dueDate = normalizeDateValue(state.dueDate);
+      const visitUrl = normalizeTaskUrl(state.visitUrl);
       const title = task.querySelector('.task-title');
       const desc = task.querySelector('.task-desc');
       const checkbox = task.querySelector('[data-task]');
@@ -3026,7 +3114,9 @@
       ensureEditableTask(task);
 
       task.dataset.section = section;
+      task.dataset.visitUrl = visitUrl;
       appendTaskToSection(task, section);
+      updateTaskVisitLink(task);
 
       const dueInput = task.querySelector('.task-due');
       if (dueInput) {
@@ -3051,7 +3141,8 @@
           isCustom: true,
           id: task.id,
           section: task.section,
-          dueDate: task.dueDate
+          dueDate: task.dueDate,
+          visitUrl: task.visitUrl
         });
         appendTaskToSection(customTask, task.section);
         allTasks.push(customTask);
@@ -3227,7 +3318,7 @@
       }
 
       if (
-        event.target.closest('[data-task], .task-priority, .task-due, .task-remove, .task-title[contenteditable="true"], .task-desc[contenteditable="true"]')
+        event.target.closest('[data-task], .task-priority, .task-due, .task-remove, .task-title[contenteditable="true"], .task-desc[contenteditable="true"], .task-link')
       ) {
         if (event.target.closest('.task-title[contenteditable="true"], .task-desc[contenteditable="true"]')) {
           event.preventDefault();
@@ -3318,6 +3409,7 @@
       const priority = customTaskPriority.value;
       const section = normalizeTaskSection(customTaskSection.value);
       const dueDate = normalizeDateValue(customTaskDueDate.value);
+      const visitUrl = customTaskUrl.value;
 
       if (!title) {
         alert('할 일 제목을 입력해 주세요.');
@@ -3331,7 +3423,8 @@
         priority,
         isCustom: true,
         section,
-        dueDate
+        dueDate,
+        visitUrl
       });
       appendTaskToSection(customTask, section);
       sortTasksInSection(section);
@@ -3340,6 +3433,7 @@
       customTaskDesc.value = '';
       customTaskPriority.value = 'mid';
       customTaskDueDate.value = '';
+      customTaskUrl.value = '';
 
       persistTaskState();
       updateProgress();
