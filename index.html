@@ -2952,29 +2952,77 @@
     }
 
     function buildPlannerPayloadSummary(payload = {}) {
-      const storage = payload.storage || {};
-      const taskState = storage.txMoveTaskState;
-      const taskStates = taskState ? safeParseJsonArray(taskState) : [];
-      const taskChecks = storage.txMoveTasks ? safeParseJsonArray(storage.txMoveTasks) : [];
-      const notes = storage.txMoveNotes || '';
-      const budget = storage.txMoveBudget || '';
+      const planner = payload.planner || {};
+      const tasks = Array.isArray(planner.tasks) ? planner.tasks : [];
+      const checkedCount = tasks.filter(task => task?.done).length;
+      const customTasks = Array.isArray(planner.customTasks) ? planner.customTasks : [];
+      const notes = planner.notes || '';
+      const budget = planner.budget || '';
 
       return {
         reason: plannerSyncReason || 'local-change',
-        taskStateCount: Array.isArray(taskStates) ? taskStates.length : 0,
-        checkedCount: Array.isArray(taskChecks) ? taskChecks.filter(Boolean).length : 0,
+        taskStateCount: tasks.length,
+        checkedCount,
+        customTaskCount: customTasks.length,
         notesLength: typeof notes === 'string' ? notes.length : String(notes || '').length,
-        budgetLength: typeof budget === 'string' ? budget.length : String(budget || '').length
+        budgetKeys: budget && typeof budget === 'object' ? Object.keys(budget) : [],
+        plannerMoveDate: planner.moveDate || ''
       };
     }
 
-    function safeParseJsonArray(value) {
+    function parseJsonValue(value, fallback) {
       try {
-        const parsed = JSON.parse(value || '[]');
-        return Array.isArray(parsed) ? parsed : [];
+        const parsed = JSON.parse(value || 'null');
+        return parsed === null ? fallback : parsed;
       } catch {
-        return [];
+        return fallback;
       }
+    }
+
+    function safeParseJsonArray(value) {
+      const parsed = parseJsonValue(value, []);
+      return Array.isArray(parsed) ? parsed : [];
+    }
+
+    function safeParseJsonObject(value, fallback = {}) {
+      const parsed = parseJsonValue(value, fallback);
+      if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+        return fallback;
+      }
+      return parsed;
+    }
+
+    function getPlannerFromLegacyStorage(storage = {}) {
+      return {
+        moveDate: String(storage.txMoveMoveDate || ''),
+        notes: String(storage.txMoveNotes || ''),
+        theme: storage.txMoveTheme || 'light',
+        tasks: safeParseJsonArray(storage.txMoveTaskState),
+        budget: safeParseJsonObject(storage.txMoveBudget, {}),
+        customTasks: safeParseJsonArray(storage.txMoveCustomTasks),
+        schedule: {
+          selectedDate: String(storage.txMoveSelectedScheduleDate || ''),
+          calendarCollapsed: storage.txMoveCalendarCollapsed === '1',
+          events: safeParseJsonObject(storage.txMoveScheduleEvents, {})
+        }
+      };
+    }
+
+    function getPlannerPayloadFromStorage() {
+      const taskState = safeParseJsonArray(localStorage.getItem('txMoveTaskState'));
+      return {
+        moveDate: localStorage.getItem('txMoveMoveDate') || '',
+        notes: localStorage.getItem('txMoveNotes') || '',
+        budget: safeParseJsonObject(localStorage.getItem('txMoveBudget'), {}),
+        theme: localStorage.getItem('txMoveTheme') || 'light',
+        tasks: taskState,
+        customTasks: safeParseJsonArray(localStorage.getItem('txMoveCustomTasks')),
+        schedule: {
+          selectedDate: localStorage.getItem('txMoveSelectedScheduleDate') || '',
+          calendarCollapsed: localStorage.getItem(CALENDAR_COLLAPSE_KEY) === '1',
+          events: safeParseJsonObject(localStorage.getItem('txMoveScheduleEvents'), {})
+        }
+      };
     }
 
     localStorage.setItem = function(key, value) {
@@ -2995,16 +3043,58 @@
     };
 
     function buildPlannerPayload() {
-      const storage = {};
-      TASK_STORAGE_KEYS.forEach(key => {
-        storage[key] = localStorage.getItem(key);
-      });
-      storage.txMoveTaskState = localStorage.getItem('txMoveTaskState') || '[]';
-      storage.txMoveNotes = localStorage.getItem('txMoveNotes') || '';
+      const planner = getPlannerPayloadFromStorage();
       return {
         updatedAt: Date.now(),
-        storage
+        planner
       };
+    }
+
+    function applyPlannerStateToLocalStorage(planner = {}) {
+      if (!planner || typeof planner !== 'object') {
+        return;
+      }
+
+      const moveDate = planner.moveDate || '';
+      const notes = planner.notes || '';
+      const theme = planner.theme === 'dark' ? 'dark' : 'light';
+      const budget = safeParseJsonObject(planner.budget, {});
+      const tasks = safeParseJsonArray(planner.tasks);
+      const providedCustomTasks = safeParseJsonArray(planner.customTasks);
+      const customTasks = providedCustomTasks.length
+        ? providedCustomTasks
+        : tasks.filter(task => task?.isCustom).map(task => ({
+          id: task.id || generateTaskId(),
+          title: String(task.title || ''),
+          desc: String(task.desc || ''),
+          priority: task.priority || 'mid',
+          section: normalizeTaskSection(task.section || 'before-move'),
+          dueOffset: task.dueOffset,
+          dueDate: task.dueDate || '',
+          visitUrl: task.visitUrl || '',
+          estimatedCost: normalizeEstimatedCost(task.estimatedCost),
+          done: Boolean(task.done)
+        }));
+      const schedule = planner.schedule && typeof planner.schedule === 'object' ? planner.schedule : {};
+      const selectedDate = schedule.selectedDate || '';
+      const calendarCollapsed = Boolean(schedule.calendarCollapsed);
+      const events = safeParseJsonObject(schedule.events, {});
+
+      const nextRevisionKey = `txMoveStorageRevision-migrated-${Date.now()}`;
+      isApplyingRemoteState = true;
+      localStorage.setItem('txMoveMoveDate', String(moveDate));
+      localStorage.setItem('txMoveNotes', String(notes));
+      localStorage.setItem('txMoveTheme', theme);
+      localStorage.setItem('txMoveTaskState', JSON.stringify(tasks));
+      localStorage.setItem('txMoveTasks', JSON.stringify(tasks.map(task => Boolean(task?.done))));
+      localStorage.setItem('txMoveCustomTasks', JSON.stringify(customTasks));
+      localStorage.setItem('txMoveBudget', JSON.stringify(budget));
+      localStorage.setItem('txMoveGoogleConnected', planner.googleConnected === true ? '1' : '');
+      localStorage.setItem(CALENDAR_COLLAPSE_KEY, calendarCollapsed ? '1' : '0');
+      localStorage.setItem('txMoveSelectedScheduleDate', String(selectedDate));
+      localStorage.setItem('txMoveScheduleEvents', JSON.stringify(events));
+      localStorage.setItem(TASK_STORAGE_REVISION_KEY, nextRevisionKey);
+      isApplyingRemoteState = false;
     }
 
     async function persistPlannerDataToServer(_source = 'local-change') {
@@ -3059,25 +3149,24 @@
         const remoteRevision = String(result?.updatedAt || '');
         if (!force && remoteRevision && remoteRevision === lastServerRevision) return;
 
-        const storage = result?.storage || {};
-        if (!storage || typeof storage !== 'object' || !Object.keys(storage).length) {
+        const legacyStorage = result?.storage;
+        const planner = result?.planner || getPlannerFromLegacyStorage(legacyStorage);
+        const hasPlannerPayload = planner && typeof planner === 'object' &&
+          (Array.isArray(planner.tasks) && planner.tasks.length > 0 ||
+           Array.isArray(planner.customTasks) && planner.customTasks.length > 0 ||
+           (planner.notes || '').length > 0 ||
+           (typeof planner.budget === 'object' && planner.budget && Object.keys(planner.budget).length > 0) ||
+           (planner.moveDate || '').length > 0);
+
+        if (!hasPlannerPayload) {
           setPlannerSyncStatus('서버 데이터가 비어 있습니다. 로컬 데이터로 동작합니다.', false);
           return;
         }
 
-        isApplyingRemoteState = true;
-        TASK_STORAGE_KEYS.forEach(key => {
-          if (!Object.prototype.hasOwnProperty.call(storage, key)) {
-            return;
-          }
-          const value = storage[key];
-          if (value === null || value === undefined) {
-            localStorage.removeItem(key);
-            return;
-          }
-          localStorage.setItem(key, String(value));
-        });
-        isApplyingRemoteState = false;
+        applyPlannerStateToLocalStorage(planner);
+        if (!result?.planner && legacyStorage && typeof legacyStorage === 'object' && Object.keys(legacyStorage).length > 0) {
+          setPlannerSyncStatus('서버 데이터 구조를 새 형식으로 마이그레이션했습니다.');
+        }
 
         lastServerRevision = remoteRevision || `${Date.now()}`;
         console.log('[Planner Sync] GET /data applied to UI state');
