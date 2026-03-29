@@ -859,11 +859,52 @@
       color: var(--danger);
     }
 
+    .schedule-item.google {
+      background: rgba(94, 123, 168, 0.08);
+      border-color: rgba(94, 123, 168, 0.18);
+    }
+
+    .schedule-item .google-label {
+      margin-top: 4px;
+      color: #3f5d88;
+      font-weight: 800;
+      font-size: 11px;
+    }
+
     .schedule-add {
       display: grid;
       gap: 10px;
       grid-template-columns: minmax(0, 1fr) auto;
       margin-top: 10px;
+    }
+
+    .calendar-sync {
+      margin-top: 12px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .calendar-sync #googleCalendarStatus {
+      display: block;
+      margin: 0;
+      line-height: 1.5;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .calendar-sync-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .calendar-sync-actions .secondary {
+      min-height: 36px;
+      border-radius: 14px;
+      padding: 0 14px;
+      font-size: 12px;
+      font-weight: 800;
+      width: auto;
     }
 
     .add-task-panel,
@@ -1421,6 +1462,14 @@
             <h3 id="scheduleMonthLabel">일정 캘린더</h3>
             <button id="nextScheduleMonth" class="secondary" type="button" aria-label="다음 월">▶</button>
           </div>
+          <div class="calendar-sync">
+            <div id="googleCalendarStatus" class="helper">구글 캘린더 미연결</div>
+            <div class="calendar-sync-actions">
+              <button id="googleConnectBtn" class="secondary" type="button">구글 캘린더 연결</button>
+              <button id="googleSyncBtn" class="secondary" type="button" disabled>동기화</button>
+              <button id="googleDisconnectBtn" class="secondary" type="button" hidden>연결 해제</button>
+            </div>
+          </div>
           <div class="calendar-day-names" aria-hidden="true">
             <span>일</span>
             <span>월</span>
@@ -1733,9 +1782,10 @@
       </div>
     </section>
 
-    <div class="footer-tip">Move smoother. Forget less. Panic less.</div>
+  <div class="footer-tip">Move smoother. Forget less. Panic less.</div>
   </main>
 
+  <script src="https://accounts.google.com/gsi/client" defer></script>
   <script>
     const taskList = document.getElementById('taskList');
     const progressText = document.getElementById('progressText');
@@ -1762,6 +1812,10 @@
     const scheduleGrid = document.getElementById('scheduleGrid');
     const selectedDateLabel = document.getElementById('selectedDateLabel');
     const selectedDateEventsMeta = document.getElementById('selectedDateEventsMeta');
+    const googleCalendarStatus = document.getElementById('googleCalendarStatus');
+    const googleConnectBtn = document.getElementById('googleConnectBtn');
+    const googleSyncBtn = document.getElementById('googleSyncBtn');
+    const googleDisconnectBtn = document.getElementById('googleDisconnectBtn');
     const scheduleInput = document.getElementById('scheduleInput');
     const addScheduleBtn = document.getElementById('addScheduleBtn');
     const scheduleList = document.getElementById('scheduleList');
@@ -1784,6 +1838,13 @@
     let scheduleCursorDate = new Date(today.getFullYear(), today.getMonth(), 1);
     let selectedScheduleDate = toDateKey(today);
     let calendarEvents = {};
+    let googleCalendarEvents = {};
+    let googleCalendarConnected = false;
+    let googleAccessToken = '';
+    let googleTokenExpiresAt = 0;
+    let googleTokenClient;
+    const GOOGLE_CLIENT_ID = '624469211510-2g9kd4udf2rh0iv4ge1lqsm083r186ck.apps.googleusercontent.com';
+    const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/calendar';
 
     function generateTaskId() {
       return `task-${Math.random().toString(36).slice(2, 8)}-${Date.now().toString(36)}`;
@@ -1818,6 +1879,67 @@
       }).format(parsed);
     }
 
+    function addDaysToDateKey(dateKey, amount) {
+      const [year, month, day] = dateKey.split('-').map(Number);
+      const next = new Date(year, month - 1, day);
+      next.setDate(next.getDate() + amount);
+      return toDateKey(next);
+    }
+
+    function toLocalDateKey(dateValue) {
+      if (!(dateValue instanceof Date) || Number.isNaN(dateValue.getTime())) return '';
+      return toDateKey(dateValue);
+    }
+
+    function getLocalEvents(dateKey) {
+      const list = calendarEvents[dateKey];
+      if (!Array.isArray(list)) return [];
+      return list.filter(Boolean).map(item => ({
+        id: item.id,
+        text: String(item.text || ''),
+        source: item.source || 'local',
+        createdAt: item.createdAt || 0,
+        googleEventId: item.googleEventId
+      }));
+    }
+
+    function getCombinedEventsForDate(dateKey) {
+      const local = getLocalEvents(dateKey);
+      const localGoogleIds = new Set(local.map(item => item.googleEventId).filter(Boolean));
+      const google = Array.isArray(googleCalendarEvents[dateKey]) ? googleCalendarEvents[dateKey] : [];
+      const filteredGoogle = google.filter(item => !localGoogleIds.has(item.googleEventId));
+      return [...local, ...filteredGoogle];
+    }
+
+    function getLocalEventIndex(dateKey, eventId) {
+      if (!eventId) return -1;
+      const events = getLocalEvents(dateKey);
+      return events.findIndex(item => item.id === eventId);
+    }
+
+    function buildAuthHeaders() {
+      return {
+        Authorization: `Bearer ${googleAccessToken}`,
+        'Content-Type': 'application/json'
+      };
+    }
+
+    function hasValidGoogleToken() {
+      return Boolean(googleAccessToken && googleTokenExpiresAt > Date.now());
+    }
+
+    function setGoogleCalendarStatus(message, isError = false) {
+      if (!googleCalendarStatus) return;
+      googleCalendarStatus.textContent = message;
+      googleCalendarStatus.style.color = isError ? 'var(--danger)' : '';
+    }
+
+    function updateGoogleButtons() {
+      googleConnectBtn.textContent = googleCalendarConnected ? '구글 캘린더 다시 연결' : '구글 캘린더 연결';
+      googleSyncBtn.disabled = !googleCalendarConnected;
+      googleDisconnectBtn.hidden = !googleCalendarConnected;
+    }
+
     function getTaskInputs() {
       return [...taskList.querySelectorAll('[data-task]')];
     }
@@ -1833,14 +1955,215 @@
     }
 
     function setCalendarEvents(nextState) {
-      calendarEvents = nextState;
+      const next = { ...nextState };
+      const normalized = {};
+      Object.keys(next).forEach(dateKey => {
+        const list = Array.isArray(next[dateKey]) ? next[dateKey] : [];
+        const filtered = list
+          .filter(item => item && item.text && item.id)
+          .map(item => ({
+            id: String(item.id),
+            text: String(item.text || ''),
+            createdAt: item.createdAt || Date.now(),
+            source: 'local',
+            googleEventId: item.googleEventId || null
+          }));
+
+        if (filtered.length) {
+          normalized[dateKey] = filtered;
+        }
+      });
+
+      calendarEvents = normalized;
       localStorage.setItem('txMoveScheduleEvents', JSON.stringify(calendarEvents));
     }
 
-    function getEventsForDate(dateKey) {
-      const list = calendarEvents[dateKey];
-      if (!Array.isArray(list)) return [];
-      return list;
+    function setGoogleCalendarEvents(nextState) {
+      googleCalendarEvents = nextState;
+    }
+
+    function setGoogleConnectedState(connected) {
+      googleCalendarConnected = connected;
+      updateGoogleButtons();
+      if (connected) {
+        setGoogleCalendarStatus('구글 캘린더가 연결되어 있습니다. 월간 동기화 가능.');
+        localStorage.setItem('txMoveGoogleConnected', '1');
+      } else {
+        setGoogleCalendarStatus('구글 캘린더 미연결');
+        googleAccessToken = '';
+        googleTokenExpiresAt = 0;
+        googleCalendarEvents = {};
+        localStorage.removeItem('txMoveGoogleConnected');
+        renderScheduleCalendar();
+        renderScheduleEvents();
+      }
+    }
+
+    async function loadGoogleCalendarEventsForMonth(year, month) {
+      if (!hasValidGoogleToken()) return;
+
+      const start = new Date(year, month, 1);
+      const end = new Date(year, month + 1, 1);
+      const params = new URLSearchParams({
+        singleEvents: 'true',
+        orderBy: 'startTime',
+        timeMin: start.toISOString(),
+        timeMax: end.toISOString(),
+        maxResults: '250'
+      });
+      const endpoint = `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`;
+
+      try {
+        const response = await fetch(endpoint, {
+          headers: buildAuthHeaders(),
+          credentials: 'omit'
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText || `HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        const nextState = {};
+        const items = Array.isArray(data.items) ? data.items : [];
+        items.forEach(item => {
+          const startDate = item.start?.date || '';
+          const dateKey = startDate
+            ? startDate
+            : toLocalDateKey(item.start?.dateTime ? new Date(item.start.dateTime) : null);
+
+          if (!dateKey) return;
+
+          const list = nextState[dateKey] || [];
+          list.push({
+            id: item.id,
+            text: item.summary || '제목 없는 일정',
+            createdAt: Date.now(),
+            source: 'google',
+            googleEventId: item.id,
+            isAllDay: Boolean(item.start?.date)
+          });
+          nextState[dateKey] = list;
+        });
+
+        setGoogleCalendarEvents(nextState);
+      } catch (error) {
+        console.error(error);
+        setGoogleCalendarStatus('구글 캘린더 동기화 실패. 연결을 다시 시도해 주세요.', true);
+        setGoogleConnectedState(false);
+      }
+    }
+
+    async function createGoogleCalendarEvent(dateKey, summary) {
+      const date = parseDateKey(dateKey);
+      if (!date || !hasValidGoogleToken()) return null;
+
+      const payload = {
+        summary,
+        start: { date: dateKey },
+        end: { date: addDaysToDateKey(dateKey, 1) },
+        reminders: { useDefault: true }
+      };
+
+      try {
+        const response = await fetch(
+          'https://www.googleapis.com/calendar/v3/calendars/primary/events',
+          {
+            method: 'POST',
+            headers: buildAuthHeaders(),
+            body: JSON.stringify(payload),
+            credentials: 'omit'
+          }
+        );
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText || `HTTP ${response.status}`);
+        }
+
+        return await response.json();
+      } catch (error) {
+        console.error(error);
+        setGoogleCalendarStatus('구글 일정 등록 실패. 구글 동기화가 잠시 불안정할 수 있습니다.', true);
+        return null;
+      }
+    }
+
+    async function deleteGoogleCalendarEvent(eventId) {
+      if (!eventId || !hasValidGoogleToken()) return false;
+      try {
+        const response = await fetch(
+          `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(eventId)}`,
+          {
+            method: 'DELETE',
+            headers: buildAuthHeaders(),
+            credentials: 'omit'
+          }
+        );
+        if (response.status !== 204 && !response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText || `HTTP ${response.status}`);
+        }
+        return true;
+      } catch (error) {
+        console.error(error);
+        setGoogleCalendarStatus('구글 일정 삭제 실패. 구글 동기화가 잠시 불안정할 수 있습니다.', true);
+        return false;
+      }
+    }
+
+    function ensureGoogleTokenClient() {
+      if (googleTokenClient) return googleTokenClient;
+      if (!window.google?.accounts?.oauth2) {
+        setGoogleCalendarStatus('구글 인증 스크립트를 아직 로드하지 못했습니다.', true);
+        return null;
+      }
+
+      googleTokenClient = window.google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: GOOGLE_SCOPES,
+        callback: (response) => {
+          if (response.error) {
+            setGoogleCalendarStatus(`구글 연결 실패: ${response.error}`, true);
+            return;
+          }
+
+          googleAccessToken = response.access_token || '';
+          googleTokenExpiresAt = Date.now() + ((response.expires_in || 3600) * 1000);
+          setGoogleConnectedState(true);
+          loadGoogleCalendarEventsForMonth(
+            scheduleCursorDate.getFullYear(),
+            scheduleCursorDate.getMonth()
+          ).then(() => {
+            renderScheduleCalendar();
+            renderScheduleEvents();
+          });
+        }
+      });
+
+      return googleTokenClient;
+    }
+
+    function connectGoogleCalendar() {
+      const client = ensureGoogleTokenClient();
+      if (!client) return;
+      setGoogleCalendarStatus('구글 계정에 연결 중...');
+      client.requestAccessToken({ prompt: 'consent' });
+    }
+
+    async function syncGoogleCalendar() {
+      if (!googleCalendarConnected || !hasValidGoogleToken()) {
+        setGoogleCalendarStatus('연결 후 동기화를 눌러주세요.', true);
+        return;
+      }
+
+      await loadGoogleCalendarEventsForMonth(
+        scheduleCursorDate.getFullYear(),
+        scheduleCursorDate.getMonth()
+      );
+      renderScheduleCalendar();
+      renderScheduleEvents();
+      setGoogleCalendarStatus('구글 캘린더 동기화 완료.');
     }
 
     function renderScheduleCalendar() {
@@ -1868,7 +2191,8 @@
         button.className = 'calendar-day';
         button.textContent = String(day);
         button.setAttribute('data-schedule-date', dateKey);
-        button.setAttribute('aria-label', `${dateKey} 일정 ${getEventsForDate(dateKey).length}개`);
+        const events = getCombinedEventsForDate(dateKey);
+        button.setAttribute('aria-label', `${dateKey} 일정 ${events.length}개`);
 
         if (dateKey === todayKey) {
           button.classList.add('today');
@@ -1878,7 +2202,7 @@
           button.classList.add('selected');
         }
 
-        if (getEventsForDate(dateKey).length > 0) {
+        if (events.length > 0) {
           button.classList.add('has-events');
         }
 
@@ -1889,7 +2213,7 @@
     function renderScheduleEvents() {
       const dateLabel = formatDateLabel(selectedScheduleDate) || '날짜를 선택해 주세요.';
       selectedDateLabel.textContent = dateLabel;
-      const events = getEventsForDate(selectedScheduleDate);
+      const events = getCombinedEventsForDate(selectedScheduleDate);
       const metaCount = `${events.length}개 등록`;
 
       selectedDateEventsMeta.textContent = selectedScheduleDate
@@ -1906,50 +2230,98 @@
         return;
       }
 
-      events.forEach((item, index) => {
+      events.forEach((item) => {
         const row = document.createElement('div');
-        row.className = 'schedule-item';
+        row.className = `schedule-item${item.source === 'google' ? ' google' : ''}`;
         const text = document.createElement('p');
+        const titleWrap = document.createElement('div');
         const removeBtn = document.createElement('button');
         text.textContent = item.text;
+        titleWrap.appendChild(text);
+        if (item.source === 'google') {
+          const label = document.createElement('div');
+          label.className = 'google-label';
+          label.textContent = 'Google Calendar';
+          titleWrap.appendChild(label);
+        }
         removeBtn.className = 'secondary';
         removeBtn.type = 'button';
         removeBtn.setAttribute('data-remove-schedule', selectedScheduleDate);
-        removeBtn.setAttribute('data-schedule-index', String(index));
+        removeBtn.setAttribute('data-schedule-event-id', item.id);
+        removeBtn.setAttribute('data-schedule-source', item.source || 'local');
         removeBtn.textContent = '삭제';
-        row.appendChild(text);
+        row.appendChild(titleWrap);
         row.appendChild(removeBtn);
         scheduleList.appendChild(row);
       });
     }
 
-    function addScheduleEvent(text) {
+    async function addScheduleEvent(text) {
       const normalized = text.trim();
       if (!normalized) return;
 
-      const existing = getEventsForDate(selectedScheduleDate).slice();
-      existing.push({ id: `e-${Date.now().toString(36)}`, text: normalized, createdAt: Date.now() });
+      const localEvents = getLocalEvents(selectedScheduleDate).slice();
+      const newEvent = { id: `e-${Date.now().toString(36)}`, text: normalized, createdAt: Date.now(), source: 'local' };
+      localEvents.push(newEvent);
 
       const next = { ...calendarEvents };
-      next[selectedScheduleDate] = existing;
+      next[selectedScheduleDate] = localEvents;
       setCalendarEvents(next);
+
+      if (googleCalendarConnected && hasValidGoogleToken()) {
+        const created = await createGoogleCalendarEvent(selectedScheduleDate, normalized);
+        if (created?.id) {
+          const updatedEvents = getLocalEvents(selectedScheduleDate).slice();
+          const index = updatedEvents.findIndex(item => item.id === newEvent.id);
+          if (index >= 0) {
+            updatedEvents[index].googleEventId = created.id;
+            const updated = { ...calendarEvents };
+            if (updatedEvents.length) {
+              updated[selectedScheduleDate] = updatedEvents;
+            } else {
+              delete updated[selectedScheduleDate];
+            }
+            setCalendarEvents(updated);
+          }
+          await syncGoogleCalendar();
+        }
+      }
+
       renderScheduleCalendar();
       renderScheduleEvents();
     }
 
-    function removeScheduleEvent(dateKey, index) {
-      const events = getEventsForDate(dateKey).slice();
-      if (index < 0 || index >= events.length) return;
-      events.splice(index, 1);
+    async function removeScheduleEvent(dateKey, eventId, source = 'local') {
+      if (!eventId) return;
 
-      const next = { ...calendarEvents };
-      if (events.length) {
-        next[dateKey] = events;
+      const localEvents = getLocalEvents(dateKey);
+
+      if (source === 'local') {
+        const index = localEvents.findIndex(event => event.id === eventId);
+        if (index < 0) return;
+
+        const googleEventId = localEvents[index].googleEventId;
+        const remaining = localEvents.slice(0, index).concat(localEvents.slice(index + 1));
+        const next = { ...calendarEvents };
+        if (remaining.length) {
+          next[dateKey] = remaining;
+        } else {
+          delete next[dateKey];
+        }
+        setCalendarEvents(next);
+
+        if (googleEventId) {
+          await deleteGoogleCalendarEvent(googleEventId);
+          await syncGoogleCalendar();
+        }
       } else {
-        delete next[dateKey];
+        const target = getCombinedEventsForDate(dateKey).find(item => item.id === eventId);
+        if (target?.googleEventId) {
+          await deleteGoogleCalendarEvent(target.googleEventId);
+          await syncGoogleCalendar();
+        }
       }
 
-      setCalendarEvents(next);
       renderScheduleCalendar();
       renderScheduleEvents();
     }
@@ -2315,6 +2687,7 @@
       const savedTheme = localStorage.getItem('txMoveTheme') || 'light';
       const savedMoveDate = localStorage.getItem('txMoveMoveDate') || '';
       const savedScheduleDate = localStorage.getItem('txMoveSelectedScheduleDate');
+      const savedGoogleConnected = localStorage.getItem('txMoveGoogleConnected') === '1';
 
       if (savedScheduleDate && /^\d{4}-\d{2}-\d{2}$/.test(savedScheduleDate)) {
         selectedScheduleDate = savedScheduleDate;
@@ -2325,6 +2698,13 @@
       }
 
       calendarEvents = getCalendarEvents();
+      setGoogleConnectedState(false);
+      if (savedGoogleConnected) {
+        setGoogleCalendarStatus('구글 캘린더 연결 기록이 있습니다. 동기화하려면 다시 연결해 주세요.');
+        googleConnectBtn.textContent = '구글 캘린더 다시 연결';
+        googleDisconnectBtn.hidden = false;
+      }
+
       renderScheduleCalendar();
       renderScheduleEvents();
 
@@ -2422,22 +2802,24 @@
       event.preventDefault();
     });
 
-    prevScheduleMonthBtn.addEventListener('click', () => {
+    prevScheduleMonthBtn.addEventListener('click', async () => {
       scheduleCursorDate = new Date(
         scheduleCursorDate.getFullYear(),
         scheduleCursorDate.getMonth() - 1,
         1
       );
       renderScheduleCalendar();
+      await syncGoogleCalendar();
     });
 
-    nextScheduleMonthBtn.addEventListener('click', () => {
+    nextScheduleMonthBtn.addEventListener('click', async () => {
       scheduleCursorDate = new Date(
         scheduleCursorDate.getFullYear(),
         scheduleCursorDate.getMonth() + 1,
         1
       );
       renderScheduleCalendar();
+      await syncGoogleCalendar();
     });
 
     scheduleGrid.addEventListener('click', event => {
@@ -2451,7 +2833,7 @@
       scheduleInput.focus();
     });
 
-    addScheduleBtn.addEventListener('click', () => {
+    addScheduleBtn.addEventListener('click', async () => {
       const text = scheduleInput.value;
       if (!text.trim()) {
         alert('일정 제목을 입력해 주세요.');
@@ -2459,7 +2841,7 @@
         return;
       }
 
-      addScheduleEvent(text);
+      await addScheduleEvent(text);
       scheduleInput.value = '';
       scheduleInput.focus();
     });
@@ -2470,14 +2852,28 @@
       addScheduleBtn.click();
     });
 
-    scheduleList.addEventListener('click', event => {
+    scheduleList.addEventListener('click', async event => {
       const removeBtn = event.target.closest('[data-remove-schedule]');
       if (!removeBtn) return;
 
       const dateKey = removeBtn.getAttribute('data-remove-schedule');
-      const index = Number(removeBtn.getAttribute('data-schedule-index'));
-      if (!Number.isFinite(index)) return;
-      removeScheduleEvent(dateKey, index);
+      const eventId = removeBtn.getAttribute('data-schedule-event-id');
+      const source = removeBtn.getAttribute('data-schedule-source') || 'local';
+      if (!dateKey || !eventId) return;
+      await removeScheduleEvent(dateKey, eventId, source);
+    });
+
+    googleConnectBtn.addEventListener('click', connectGoogleCalendar);
+    googleSyncBtn.addEventListener('click', syncGoogleCalendar);
+    googleDisconnectBtn.addEventListener('click', () => {
+      if (googleTokenClient) {
+        try {
+          window.google?.accounts?.oauth2?.revoke(googleAccessToken, () => {});
+        } catch {
+          // silent
+        }
+      }
+      setGoogleConnectedState(false);
     });
 
     addTaskBtn.addEventListener('click', () => {
