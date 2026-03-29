@@ -2918,6 +2918,28 @@
       console.groupEnd();
     }
 
+    let pendingStorageRefresh = null;
+
+    function isEditingTaskInline() {
+      const active = document.activeElement;
+      return !!active && (
+        active.matches?.('.task-title[contenteditable="true"], .task-desc[contenteditable="true"], .task-cost-input') ||
+        active.closest?.('.task, .notes, #notes')
+      );
+    }
+
+    function scheduleStorageRefresh() {
+      if (pendingStorageRefresh) {
+        clearTimeout(pendingStorageRefresh);
+      }
+
+      pendingStorageRefresh = setTimeout(() => {
+        if (!document.hidden && !isEditingTaskInline()) {
+          loadState();
+        }
+      }, 140);
+    }
+
     function getSectionContainer(section) {
       const normalized = normalizeTaskSection(section);
       return sectionProgressMap[normalized]?.container || beforeMoveList;
@@ -4634,6 +4656,42 @@
         input.checked = false;
       });
       updateProgress();
+    });
+
+    window.addEventListener('pagehide', () => {
+      persistTaskState();
+      localStorage.setItem('txMoveNotes', notes.value);
+    });
+
+    window.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        scheduleStorageRefresh();
+      } else {
+        persistTaskState();
+        localStorage.setItem('txMoveNotes', notes.value);
+      }
+    });
+
+    window.addEventListener('storage', event => {
+      if (!event.key) return;
+
+      if (![
+        'txMoveTaskState',
+        'txMoveTasks',
+        'txMoveCustomTasks',
+        'txMoveBudget',
+        'txMoveMoveDate',
+        'txMoveNotes',
+        'txMoveTheme',
+        'txMoveGoogleConnected',
+        'txMoveSelectedScheduleDate',
+        'txMoveCalendarCollapsed',
+        'txMoveScheduleEvents'
+      ].includes(event.key)) {
+        return;
+      }
+
+      scheduleStorageRefresh();
     });
 
     loadState();
