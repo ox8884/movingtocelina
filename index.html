@@ -490,6 +490,13 @@
       letter-spacing: -0.05em;
     }
 
+    .summary-truncate {
+      max-width: 100%;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
     .summary-copy {
       color: var(--muted);
       line-height: 1.6;
@@ -1473,7 +1480,7 @@
           <span>가장 급한 일</span>
           <span class="summary-badge">Top Priority</span>
         </div>
-        <div class="summary-value" id="summaryFocus">클로징 서류</div>
+        <div class="summary-value summary-truncate" id="summaryFocus">클로징 서류</div>
         <div class="summary-copy">가장 먼저 끝내야 뒤 일정이 안 밀리는 핵심 포인트.</div>
       </div>
 
@@ -1482,7 +1489,7 @@
           <span>이사 날짜</span>
           <span class="summary-badge" id="summaryDday">D-day</span>
         </div>
-        <div class="summary-value" id="summaryMoveDate">날짜 미입력</div>
+        <div class="summary-value summary-truncate" id="summaryMoveDate">날짜 미입력</div>
         <div class="summary-copy">입력한 이사 날짜를 기준으로 남은 일수를 자동 계산합니다.</div>
       </div>
 
@@ -2459,6 +2466,11 @@
       return `D+${Math.abs(dayDiff)}`;
     }
 
+    function truncateSummaryText(value, max = 20) {
+      const text = (value || '').toString();
+      return text.length > max ? `${text.slice(0, max)}...` : text;
+    }
+
     function updateMoveDate(dateString, save = true) {
       const formattedDate = formatMoveDate(dateString);
       const dday = getDdayLabel(dateString);
@@ -2466,7 +2478,7 @@
       moveDateInput.value = dateString || '';
       moveDateDisplay.textContent = dateString ? formattedDate : '이사 날짜를 입력해 두세요.';
       dDayDisplay.textContent = dday;
-      summaryMoveDate.textContent = formattedDate;
+      summaryMoveDate.textContent = truncateSummaryText(formattedDate, 20);
       summaryDday.textContent = dday;
 
       if (save) {
@@ -2588,7 +2600,7 @@
 
       const pendingUrgentCount = pendingTasks.filter(task => getTaskPriority(task) === 'high').length;
       const nextTaskTitle = pendingTasks[0]?.querySelector('.task-title')?.textContent?.trim() || '모든 핵심 항목 완료';
-      const shortNextTask = nextTaskTitle.length > 10 ? `${nextTaskTitle.slice(0, 10)}...` : nextTaskTitle;
+      const shortNextTask = truncateSummaryText(nextTaskTitle, 20);
 
       progressText.textContent = `${percent}%`;
       progressSub.textContent = `${done} / ${total} 완료`;
@@ -2597,7 +2609,7 @@
       checklistMeta.textContent = `${done} / ${total} 완료`;
       remainingCount.textContent = formatCountLabel(remaining);
       urgentCount.textContent = formatCountLabel(pendingUrgentCount);
-      nextFocus.textContent = nextTaskTitle;
+      nextFocus.textContent = shortNextTask;
       summaryFocus.textContent = shortNextTask;
       progressBar.style.width = `${percent}%`;
       progressRing.style.setProperty('--progress-angle', `${percent * 3.6}deg`);
