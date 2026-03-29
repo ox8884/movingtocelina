@@ -202,6 +202,84 @@
       text-decoration: line-through;
     }
 
+    .task-remove {
+      border: 1px solid #fecaca;
+      background: #fff1f2;
+      color: #b91c1c;
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      align-self: center;
+    }
+
+    .add-task-panel {
+      margin-top: 14px;
+      border: 1px dashed #bfdbfe;
+      border-radius: 16px;
+      background: #f8fbff;
+      padding: 14px;
+    }
+
+    .add-task-title {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      color: #1e3a8a;
+    }
+
+    .add-task-grid {
+      display: grid;
+      grid-template-columns: 1fr 160px;
+      gap: 10px;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+
+    .field span {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+    }
+
+    .field input,
+    .field select,
+    .field textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font: inherit;
+      background: white;
+      outline: none;
+    }
+
+    .field input:focus,
+    .field select:focus,
+    .field textarea:focus {
+      border-color: #93c5fd;
+      box-shadow: 0 0 0 4px rgba(147, 197, 253, 0.25);
+    }
+
+    .field-full {
+      grid-column: 1 / -1;
+    }
+
+    .field textarea {
+      min-height: 74px;
+      resize: vertical;
+    }
+
+    .add-task-actions {
+      margin-top: 10px;
+      display: flex;
+      justify-content: flex-end;
+    }
+
     .timeline {
       display: grid;
       gap: 14px;
@@ -334,6 +412,10 @@
       .top-grid,
       .main-grid,
       .budget-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .add-task-grid {
         grid-template-columns: 1fr;
       }
     }
@@ -471,6 +553,35 @@
               <span class="tag low">일반</span>
             </label>
           </div>
+
+          <div class="add-task-panel">
+            <div class="add-task-title">내가 원하는 체크리스트 항목 추가</div>
+            <div class="add-task-grid">
+              <label class="field">
+                <span>할 일 제목</span>
+                <input id="customTaskTitle" type="text" placeholder="예: HOA 계정 이전 신청" />
+              </label>
+
+              <label class="field">
+                <span>우선순위</span>
+                <select id="customTaskPriority">
+                  <option value="high">급함</option>
+                  <option value="mid" selected>중요</option>
+                  <option value="low">일반</option>
+                </select>
+              </label>
+
+              <label class="field field-full">
+                <span>설명 (선택)</span>
+                <textarea id="customTaskDesc" placeholder="예: 커뮤니티 입주 서류/키패드 등록 일정 확인"></textarea>
+              </label>
+            </div>
+
+            <div class="add-task-actions">
+              <button class="primary" id="addTaskBtn" type="button">체크리스트에 추가</button>
+            </div>
+            <div class="helper">추가한 항목은 이 브라우저에 자동 저장됩니다.</div>
+          </div>
         </div>
 
         <div class="card">
@@ -603,20 +714,96 @@
   </div>
 
   <script>
-    const taskInputs = [...document.querySelectorAll('[data-task]')];
+    const taskList = document.getElementById('taskList');
     const progressText = document.getElementById('progressText');
     const progressSub = document.getElementById('progressSub');
     const progressBar = document.getElementById('progressBar');
+    const customTaskTitle = document.getElementById('customTaskTitle');
+    const customTaskDesc = document.getElementById('customTaskDesc');
+    const customTaskPriority = document.getElementById('customTaskPriority');
+    const addTaskBtn = document.getElementById('addTaskBtn');
     const notes = document.getElementById('notes');
     const budgetIds = ['shipping', 'flight', 'hotel', 'moving', 'utility', 'misc'];
     const budgetTotal = document.getElementById('budgetTotal');
     const exportBtn = document.getElementById('exportBtn');
     const resetBtn = document.getElementById('resetBtn');
 
+    const priorityMeta = {
+      high: { text: '급함', className: 'high' },
+      mid: { text: '중요', className: 'mid' },
+      low: { text: '일반', className: 'low' }
+    };
+
+    function getTaskInputs() {
+      return [...taskList.querySelectorAll('[data-task]')];
+    }
+
+    function createTaskElement({ title, desc, priority = 'mid', isCustom = false }) {
+      const safePriority = priorityMeta[priority] ? priority : 'mid';
+      const tagMeta = priorityMeta[safePriority];
+      const label = document.createElement('label');
+      label.className = 'task';
+
+      if (isCustom) {
+        label.dataset.customTask = 'true';
+      }
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.setAttribute('data-task', '');
+
+      const textWrap = document.createElement('div');
+      const titleDiv = document.createElement('div');
+      titleDiv.className = 'task-title';
+      titleDiv.textContent = title;
+      textWrap.appendChild(titleDiv);
+
+      if (desc) {
+        const descDiv = document.createElement('div');
+        descDiv.className = 'task-desc';
+        descDiv.textContent = desc;
+        textWrap.appendChild(descDiv);
+      }
+
+      const tag = document.createElement('span');
+      tag.className = `tag ${tagMeta.className}`;
+      tag.textContent = tagMeta.text;
+
+      label.append(checkbox, textWrap, tag);
+
+      if (isCustom) {
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'task-remove';
+        removeBtn.textContent = '삭제';
+        removeBtn.setAttribute('data-remove-custom', '');
+        removeBtn.setAttribute('aria-label', `${title} 삭제`);
+        label.appendChild(removeBtn);
+      }
+
+      return label;
+    }
+
+    function saveCustomTasks() {
+      const customTasks = [...taskList.querySelectorAll('.task[data-custom-task="true"]')].map(task => {
+        const title = task.querySelector('.task-title')?.textContent?.trim() || '';
+        const desc = task.querySelector('.task-desc')?.textContent?.trim() || '';
+        const priorityClass = [...task.querySelector('.tag').classList].find(cls => priorityMeta[cls]);
+        return {
+          title,
+          desc,
+          priority: priorityClass || 'mid'
+        };
+      });
+
+      localStorage.setItem('txMoveCustomTasks', JSON.stringify(customTasks));
+    }
+
     function updateProgress() {
+      const taskInputs = getTaskInputs();
       const done = taskInputs.filter(input => input.checked).length;
       const total = taskInputs.length;
-      const percent = Math.round((done / total) * 100);
+      const percent = total ? Math.round((done / total) * 100) : 0;
 
       progressText.textContent = `${percent}%`;
       progressSub.textContent = `${done} / ${total}개 완료`;
@@ -643,7 +830,19 @@
     }
 
     function loadState() {
+      const savedCustomTasks = JSON.parse(localStorage.getItem('txMoveCustomTasks') || '[]');
+      savedCustomTasks.forEach(task => {
+        const customTask = createTaskElement({
+          title: task.title,
+          desc: task.desc,
+          priority: task.priority,
+          isCustom: true
+        });
+        taskList.appendChild(customTask);
+      });
+
       const savedTasks = JSON.parse(localStorage.getItem('txMoveTasks') || '[]');
+      const taskInputs = getTaskInputs();
       taskInputs.forEach((input, index) => {
         input.checked = Boolean(savedTasks[index]);
       });
@@ -660,7 +859,44 @@
       updateBudget();
     }
 
-    taskInputs.forEach(input => input.addEventListener('change', updateProgress));
+    taskList.addEventListener('change', event => {
+      if (event.target.matches('[data-task]')) {
+        updateProgress();
+      }
+    });
+
+    taskList.addEventListener('click', event => {
+      const removeBtn = event.target.closest('[data-remove-custom]');
+      if (!removeBtn) return;
+
+      removeBtn.closest('.task')?.remove();
+      saveCustomTasks();
+      updateProgress();
+    });
+
+    addTaskBtn.addEventListener('click', () => {
+      const title = customTaskTitle.value.trim();
+      const desc = customTaskDesc.value.trim();
+      const priority = customTaskPriority.value;
+
+      if (!title) {
+        alert('할 일 제목을 입력해 주세요.');
+        customTaskTitle.focus();
+        return;
+      }
+
+      const customTask = createTaskElement({ title, desc, priority, isCustom: true });
+      taskList.appendChild(customTask);
+
+      customTaskTitle.value = '';
+      customTaskDesc.value = '';
+      customTaskPriority.value = 'mid';
+
+      saveCustomTasks();
+      updateProgress();
+      customTaskTitle.focus();
+    });
+
     budgetIds.forEach(id => document.getElementById(id).addEventListener('input', updateBudget));
 
     notes.addEventListener('input', () => {
@@ -678,6 +914,7 @@
     });
 
     resetBtn.addEventListener('click', () => {
+      const taskInputs = getTaskInputs();
       taskInputs.forEach(input => input.checked = false);
       updateProgress();
     });
