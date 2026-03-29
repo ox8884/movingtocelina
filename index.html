@@ -3722,6 +3722,20 @@
       }
     }
 
+    function ensureStableTaskId(task, legacyCounters) {
+      if (task.dataset.taskId) return;
+
+      if (task.dataset.customTask === 'true') {
+        task.dataset.taskId = generateTaskId();
+        return;
+      }
+
+      const section = normalizeTaskSection(task.dataset.section || getTaskSection(task));
+      const next = (legacyCounters[section] || 0) + 1;
+      legacyCounters[section] = next;
+      task.dataset.taskId = `legacy-${section}-${String(next).padStart(2, '0')}`;
+    }
+
     function ensureEditableTask(task) {
       const title = task.querySelector('.task-title');
       const desc = task.querySelector('.task-desc');
@@ -4178,17 +4192,44 @@
         existingIds.add(task.id);
       });
 
+      const legacyCounters = {};
+      allTasks.forEach(task => ensureStableTaskId(task, legacyCounters));
       allTasks.forEach(task => ensureEditableTask(task));
+
+      const sectionStateFallback = {};
+      const consumedStateIds = new Set();
+      Array.from(savedTaskState.values()).forEach(state => {
+        const section = normalizeTaskSection(state.section);
+        (sectionStateFallback[section] ||= []).push(state);
+      });
+
+      const consumeFallbackState = (task) => {
+        const section = normalizeTaskSection(task.dataset.section);
+        const candidates = sectionStateFallback[section] || [];
+        if (!candidates.length) {
+          return null;
+        }
+
+        const title = normalizeTaskText(task.querySelector('.task-title')?.textContent || '');
+        const matchedIndex = candidates.findIndex(state =>
+          !consumedStateIds.has(state.id) && normalizeTaskText(state.title || '') === title
+        );
+        const useIndex = matchedIndex >= 0 ? matchedIndex : 0;
+        const state = candidates.splice(useIndex, 1)[0];
+        if (!state) {
+          return null;
+        }
+        consumedStateIds.add(state.id);
+        return state;
+      };
 
       if (hasSavedTaskState) {
         allTasks.forEach(task => {
-          if (!task.dataset.taskId) {
-            task.dataset.taskId = generateTaskId();
-          }
-
           const state = savedTaskState.get(task.dataset.taskId);
-          if (!state) return;
-          applyTaskStateToTask(task, state);
+          const fallbackState = state ? null : consumeFallbackState(task);
+          const nextState = state || fallbackState;
+          if (!nextState) return;
+          applyTaskStateToTask(task, nextState);
         });
       } else {
         const savedTasks = JSON.parse(localStorage.getItem('txMoveTasks') || '[]');
