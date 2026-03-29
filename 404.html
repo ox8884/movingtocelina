@@ -6,29 +6,43 @@
     <title>페이지 이동 중</title>
     <script>
       (function() {
-        const fallback = "/movingtocelina/";
         const path = window.location.pathname;
 
-        if (path === "/movingtocelina" || path === "/movingtocelina/") {
-          window.location.replace(fallback);
-          return;
-        }
-
-        const legacyPaths = [
+        const candidates = [
+          "/movingtocelina",
+          "/movingtocelina/",
           "/Texas%20moving",
           "/Texas%20moving/",
-          "/Texas%20moving/index.html",
           "/Texas moving",
-          "/Texas moving/",
-          "/Texas moving/index.html"
+          "/Texas moving/"
         ];
 
-        if (legacyPaths.includes(path) || path.startsWith("/Texas%20moving/") || path.startsWith("/Texas moving/")) {
+        const fallback = (() => {
+          for (const candidate of candidates) {
+            if (path === candidate || path === `${candidate}/` || path.startsWith(`${candidate}/`) || path.startsWith(`${candidate}/index.html`)) {
+              return candidate.endsWith("/") ? candidate : `${candidate}/`;
+            }
+          }
+          return "/";
+        })();
+
+        if (path === fallback || path === `${fallback}index.html`) {
           window.location.replace(fallback);
           return;
         }
 
-        window.location.replace(fallback + "#");
+        if (candidates.some((candidate) =>
+          path.startsWith(`${candidate}/`) ||
+          path === candidate ||
+          candidate === "/movingtocelina" && path.startsWith("/movingtocelina")
+        )) {
+          window.location.replace(fallback);
+          return;
+        }
+
+        // For any other invalid path (including custom-domain root paths),
+        // send users to site root.
+        window.location.replace(`${fallback}#`);
       })();
     </script>
   </head>
