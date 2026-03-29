@@ -1727,12 +1727,12 @@
     function createTaskElement({ title, desc, priority = 'mid', isCustom = false, id }) {
       const safePriority = priorityMeta[priority] ? priority : 'mid';
       const tagMeta = priorityMeta[safePriority];
-      const label = document.createElement('label');
-      label.className = 'task';
-      label.dataset.taskId = id || generateTaskId();
+      const taskEl = document.createElement('div');
+      taskEl.className = 'task';
+      taskEl.dataset.taskId = id || generateTaskId();
 
       if (isCustom) {
-        label.dataset.customTask = 'true';
+        taskEl.dataset.customTask = 'true';
       }
 
       const checkbox = document.createElement('input');
@@ -1772,7 +1772,7 @@
       `;
       prioritySelect.value = safePriority;
 
-      label.append(checkbox, textWrap, tag, prioritySelect);
+      taskEl.append(checkbox, textWrap, tag, prioritySelect);
 
       if (isCustom) {
         const removeBtn = document.createElement('button');
@@ -1781,10 +1781,10 @@
         removeBtn.textContent = '삭제';
         removeBtn.setAttribute('data-remove-custom', '');
         removeBtn.setAttribute('aria-label', `${title} 삭제`);
-        label.appendChild(removeBtn);
+        taskEl.appendChild(removeBtn);
       }
 
-      return label;
+      return taskEl;
     }
 
     function updateProgress() {
@@ -1990,6 +1990,26 @@
       removeBtn.closest('.task')?.remove();
       persistTaskState();
       updateProgress();
+
+      return;
+    });
+
+    taskList.addEventListener('click', event => {
+      const clickedTask = event.target.closest('.task');
+      if (!clickedTask) {
+        return;
+      }
+
+      if (
+        event.target.closest('[data-task], .task-priority, .task-title[contenteditable="true"], .task-desc[contenteditable="true"]')
+      ) {
+        if (event.target.closest('.task-title[contenteditable="true"], .task-desc[contenteditable="true"]')) {
+          event.preventDefault();
+        }
+        return;
+      }
+
+      event.preventDefault();
     });
 
     addTaskBtn.addEventListener('click', () => {
