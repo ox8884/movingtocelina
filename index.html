@@ -200,6 +200,17 @@
       flex-wrap: wrap;
     }
 
+    .hero-calendar {
+      margin-top: 6px;
+    }
+
+    .hero-calendar .checklist-calendar {
+      margin-top: 8px;
+      padding: 16px;
+      border-radius: 22px;
+      box-shadow: 0 10px 24px rgba(75, 52, 27, 0.08);
+    }
+
     .hero-chip {
       display: inline-flex;
       align-items: center;
@@ -1368,6 +1379,44 @@
           <a class="hero-action primary" href="#checklistSection">핵심 체크리스트 보기</a>
           <a class="hero-action ghost" href="#budgetSection">예산 바로 입력하기</a>
         </div>
+        <section class="hero-calendar">
+          <div class="checklist-calendar">
+            <div class="calendar-toolbar">
+              <button id="prevScheduleMonth" class="secondary" type="button" aria-label="이전 월">◀</button>
+              <h3 id="scheduleMonthLabel">일정 캘린더</h3>
+              <button id="nextScheduleMonth" class="secondary" type="button" aria-label="다음 월">▶</button>
+            </div>
+            <div class="calendar-sync">
+              <div id="googleCalendarStatus" class="helper">구글 캘린더 미연결</div>
+              <div class="calendar-sync-actions">
+                <button id="googleConnectBtn" class="secondary" type="button">구글 캘린더 연결</button>
+                <button id="googleSyncBtn" class="secondary" type="button" disabled>동기화</button>
+                <button id="googleDisconnectBtn" class="secondary" type="button" hidden>연결 해제</button>
+              </div>
+            </div>
+            <div class="calendar-day-names" aria-hidden="true">
+              <span>일</span>
+              <span>월</span>
+              <span>화</span>
+              <span>수</span>
+              <span>목</span>
+              <span>금</span>
+              <span>토</span>
+            </div>
+            <div id="scheduleGrid" class="calendar-grid" role="grid" aria-label="달력"></div>
+
+            <div class="schedule-date-header">
+              <h4 id="selectedDateLabel">선택한 날짜</h4>
+              <div class="helper" id="selectedDateEventsMeta">날짜를 눌러 할 일을 입력해 주세요.</div>
+            </div>
+
+            <div class="schedule-add">
+              <input id="scheduleInput" type="text" placeholder="이날 할 일/약속/메모 입력" />
+              <button id="addScheduleBtn" class="primary" type="button">추가</button>
+            </div>
+            <div id="scheduleList" class="schedule-list"></div>
+          </div>
+        </section>
       </div>
 
       <aside class="hero-spotlight">
@@ -1454,43 +1503,6 @@
             <p>이사 전에 놓치기 쉬운 큰 덩어리들만 먼저 모았습니다. 완료 체크는 바로 저장됩니다.</p>
           </div>
           <span class="pill">Browser Save On</span>
-        </div>
-
-        <div class="checklist-calendar">
-          <div class="calendar-toolbar">
-            <button id="prevScheduleMonth" class="secondary" type="button" aria-label="이전 월">◀</button>
-            <h3 id="scheduleMonthLabel">일정 캘린더</h3>
-            <button id="nextScheduleMonth" class="secondary" type="button" aria-label="다음 월">▶</button>
-          </div>
-          <div class="calendar-sync">
-            <div id="googleCalendarStatus" class="helper">구글 캘린더 미연결</div>
-            <div class="calendar-sync-actions">
-              <button id="googleConnectBtn" class="secondary" type="button">구글 캘린더 연결</button>
-              <button id="googleSyncBtn" class="secondary" type="button" disabled>동기화</button>
-              <button id="googleDisconnectBtn" class="secondary" type="button" hidden>연결 해제</button>
-            </div>
-          </div>
-          <div class="calendar-day-names" aria-hidden="true">
-            <span>일</span>
-            <span>월</span>
-            <span>화</span>
-            <span>수</span>
-            <span>목</span>
-            <span>금</span>
-            <span>토</span>
-          </div>
-          <div id="scheduleGrid" class="calendar-grid" role="grid" aria-label="달력"></div>
-
-          <div class="schedule-date-header">
-            <h4 id="selectedDateLabel">선택한 날짜</h4>
-            <div class="helper" id="selectedDateEventsMeta">날짜를 눌러 할 일을 입력해 주세요.</div>
-          </div>
-
-          <div class="schedule-add">
-            <input id="scheduleInput" type="text" placeholder="이날 할 일/약속/메모 입력" />
-            <button id="addScheduleBtn" class="primary" type="button">추가</button>
-          </div>
-          <div id="scheduleList" class="schedule-list"></div>
         </div>
 
         <div class="progress-strip">
