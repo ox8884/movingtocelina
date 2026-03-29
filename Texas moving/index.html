@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>텍사스 이사 준비 대시보드</title>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --accent: #2563eb;
+      --accent-soft: #dbeafe;
+      --ok: #16a34a;
+      --warn: #f59e0b;
+      --danger: #dc2626;
+      --shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+      --radius: 20px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      background: linear-gradient(180deg, #eff6ff 0%, var(--bg) 220px);
+      color: var(--text);
+    }
+
+    .container {
+      width: min(1200px, calc(100% - 32px));
+      margin: 24px auto 48px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #1d4ed8, #2563eb 55%, #60a5fa);
+      color: white;
+      border-radius: 28px;
+      padding: 28px;
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::after {
+      content: "🤠";
+      position: absolute;
+      right: 26px;
+      top: 20px;
+      font-size: 54px;
+      opacity: 0.18;
+    }
+
+    .hero h1 {
+      margin: 0 0 8px;
+      font-size: clamp(28px, 4vw, 42px);
+    }
+
+    .hero p {
+      margin: 0;
+      max-width: 760px;
+      line-height: 1.6;
+      color: rgba(255,255,255,0.92);
+    }
+
+    .top-grid,
+    .main-grid {
+      display: grid;
+      gap: 18px;
+      margin-top: 18px;
+    }
+
+    .top-grid {
+      grid-template-columns: repeat(4, 1fr);
+    }
+
+    .main-grid {
+      grid-template-columns: 1.1fr 0.9fr;
+      align-items: start;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid rgba(229, 231, 235, 0.8);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 20px;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .stat-value {
+      font-size: 30px;
+      font-weight: 800;
+    }
+
+    .stat-sub {
+      margin-top: 8px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .section-title h2 {
+      margin: 0;
+      font-size: 20px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .progress-wrap {
+      background: #eaf0ff;
+      border-radius: 999px;
+      height: 14px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #2563eb, #60a5fa);
+      border-radius: inherit;
+      transition: width 0.3s ease;
+    }
+
+    .checklist {
+      display: grid;
+      gap: 12px;
+    }
+
+    .task {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .task input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      margin-top: 2px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .task-title {
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .task-desc {
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+
+    .tag {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 8px 10px;
+      border-radius: 999px;
+      align-self: center;
+    }
+
+    .tag.high { background: #fee2e2; color: var(--danger); }
+    .tag.mid { background: #fef3c7; color: #b45309; }
+    .tag.low { background: #dcfce7; color: var(--ok); }
+
+    .task.done {
+      background: #f8fafc;
+      opacity: 0.78;
+    }
+
+    .task.done .task-title {
+      text-decoration: line-through;
+    }
+
+    .timeline {
+      display: grid;
+      gap: 14px;
+    }
+
+    .timeline-item {
+      display: grid;
+      grid-template-columns: 92px 1fr;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .date-box {
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 12px;
+      text-align: center;
+      font-weight: 800;
+      color: var(--accent);
+    }
+
+    .time-content {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+    }
+
+    .time-content strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .mini-list {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 14px;
+    }
+
+    .budget-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .budget-box {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      background: #fbfdff;
+    }
+
+    .budget-box label {
+      display: block;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .budget-box input,
+    textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font: inherit;
+      outline: none;
+      background: white;
+    }
+
+    .budget-box input:focus,
+    textarea:focus {
+      border-color: #93c5fd;
+      box-shadow: 0 0 0 4px rgba(147, 197, 253, 0.25);
+    }
+
+    .budget-total {
+      margin-top: 14px;
+      padding: 16px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #eff6ff, #dbeafe);
+      color: #1d4ed8;
+      font-weight: 800;
+      font-size: 24px;
+    }
+
+    .notes {
+      min-height: 170px;
+      resize: vertical;
+      line-height: 1.6;
+    }
+
+    .helper {
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .footer-tip {
+      margin-top: 18px;
+      font-size: 13px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
+    button {
+      border: none;
+      border-radius: 12px;
+      padding: 11px 14px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.15s ease, opacity 0.15s ease;
+    }
+
+    button:hover { transform: translateY(-1px); }
+    .primary { background: var(--accent); color: white; }
+    .secondary { background: #eef2ff; color: #3730a3; }
+
+    @media (max-width: 980px) {
+      .top-grid,
+      .main-grid,
+      .budget-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <section class="hero">
+      <h1>텍사스 이사 준비 대시보드</h1>
+      <p>
+        집 클로징, 포장, 차량 이동, 주소 변경, 유틸리티 연결까지 한 번에 정리하는 개인용 홈페이지예요.
+        체크하면 진행률이 올라가고, 예산도 바로 합산돼서 “뭐가 남았더라?” 상태를 줄여줍니다.
+      </p>
+    </section>
+
+    <section class="top-grid">
+      <div class="card">
+        <div class="stat-label">전체 진행률</div>
+        <div class="stat-value" id="progressText">0%</div>
+        <div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
+        <div class="stat-sub" id="progressSub">0 / 10개 완료</div>
+      </div>
+      <div class="card">
+        <div class="stat-label">가장 급한 일</div>
+        <div class="stat-value" style="font-size:22px;">클로징 서류 확인</div>
+        <div class="stat-sub">Loan / 보험 / 신분증 / 자금 흐름 체크</div>
+      </div>
+      <div class="card">
+        <div class="stat-label">이동 준비</div>
+        <div class="stat-value" style="font-size:22px;">차량 + 짐</div>
+        <div class="stat-sub">차량 운송 / 이삿짐 / 고양이 이동 동선</div>
+      </div>
+      <div class="card">
+        <div class="stat-label">정착 준비</div>
+        <div class="stat-value" style="font-size:22px;">유틸리티 연결</div>
+        <div class="stat-sub">전기 / 수도 / 인터넷 / 주소 변경</div>
+      </div>
+    </section>
+
+    <section class="main-grid">
+      <div class="left-col" style="display:grid; gap:18px;">
+        <div class="card">
+          <div class="section-title">
+            <h2>핵심 체크리스트</h2>
+            <span class="pill">완료 시 자동 저장</span>
+          </div>
+          <div class="checklist" id="taskList">
+            <label class="task">
+              <input type="checkbox" data-task />
+              <div>
+                <div class="task-title">클로징 일정과 준비물 최종 확인</div>
+                <div class="task-desc">클로징 날짜, 장소, 필요한 ID, 자금 이체 방식, 최종 서류를 다시 확인.</div>
+              </div>
+              <span class="tag high">급함</span>
+            </label>
+
+            <label class="task">
+              <input type="checkbox" data-task />
+              <div>
+                <div class="task-title">주택 보험 연결 및 대출 쪽 전달</div>
+                <div class="task-desc">새 집 보험 바인드 후 lender / builder 측에서 문제 없이 수령했는지 체크.</div>
+              </div>
+              <span class="tag high">급함</span>
+            </label>
+
+            <label class="task">
+              <input type="checkbox" data-task />
+              <div>
+                <div class="task-title">현재 집 정리 / 판매 준비</div>
+                <div class="task-desc">정리, 사진, 청소, 수리, 스테이징, 리스팅 일정까지 한 번에 맞추기.</div>
+              </div>
+              <span class="tag mid">중요</span>
+            </label>
+
+            <label class="task">
+              <input type="checkbox" data-task />
+              <div>
+                <div class="task-title">이삿짐 분류: 가져갈 것 / 버릴 것 / 판매할 것</div>
+                <div class="task-desc">큰 가전, 침대, 박스, TV, 탁구대 등 실제 이동 품목 확정.</div>
+              </div>
+              <span class="tag mid">중요</span>
+            </label>
+
+            <label class="task">
+              <input type="checkbox" data-task />
+              <div>
+                <div class="task-title">차량 이동 계획 확정</div>
+                <div class="task-desc">1대 운송, 1대 직접 운전 여부와 인수/반납 날짜를 정리.</div>
+              </div>
+              <span class="tag mid">중요</span>
+            </label>
+
+            <label class="task">
+              <input type="checkbox" data-task />
+              <div>
+                <div class="task-title">고양이 이동 세팅 준비</div>
+                <div class="task-desc">이동장, 물, 화장실, 쉬는 공간, 탈출 방지 커버 등 점검.</div>
+              </div>
+              <span class="tag mid">중요</span>
+            </label>
+
+            <label class="task">
+              <input type="checkbox" data-task />
+              <div>
+                <div class="task-title">텍사스 유틸리티 예약</div>
+                <div class="task-desc">전기, 수도, 인터넷, 쓰레기 서비스 시작일을 입주일에 맞추기.</div>
+              </div>
+              <span class="tag high">급함</span>
+            </label>
+
+            <label class="task">
+              <input type="checkbox" data-task />
+              <div>
+                <div class="task-title">주소 변경 / 우편 포워딩</div>
+                <div class="task-desc">은행, 보험, DMV, 카드, Amazon, 병원, 각종 계정 주소 업데이트.</div>
+              </div>
+              <span class="tag low">일반</span>
+            </label>
+
+            <label class="task">
+              <input type="checkbox" data-task />
+              <div>
+                <div class="task-title">텍사스 DMV / 번호판 / 면세 신청 계획 세우기</div>
+                <div class="task-desc">운전면허, 차량 등록, DV plate, 재산세 관련 일정 체크.</div>
+              </div>
+              <span class="tag mid">중요</span>
+            </label>
+
+            <label class="task">
+              <input type="checkbox" data-task />
+              <div>
+                <div class="task-title">입주 첫날 필수품 가방 따로 준비</div>
+                <div class="task-desc">충전기, 약, 서류, 고양이 용품, 세면도구, 옷 2~3벌은 별도 보관.</div>
+              </div>
+              <span class="tag low">일반</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-title">
+            <h2>간단 타임라인</h2>
+            <span class="pill">직접 수정해서 써도 됨</span>
+          </div>
+          <div class="timeline">
+            <div class="timeline-item">
+              <div class="date-box">T-14</div>
+              <div class="time-content">
+                <strong>서류 / 비용 / 일정 정리</strong>
+                <ul class="mini-list">
+                  <li>클로징 관련 서류 최종 체크</li>
+                  <li>보험 바인드 완료</li>
+                  <li>이삿짐 업체 / 차량 운송 일정 확정</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="timeline-item">
+              <div class="date-box">T-7</div>
+              <div class="time-content">
+                <strong>포장 + 주소 변경 시작</strong>
+                <ul class="mini-list">
+                  <li>안 쓰는 물건 먼저 박스 포장</li>
+                  <li>우편 포워딩, 주요 계정 주소 변경</li>
+                  <li>유틸리티 시작일 예약</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="timeline-item">
+              <div class="date-box">D-Day</div>
+              <div class="time-content">
+                <strong>클로징 / 열쇠 수령 / 입주 준비</strong>
+                <ul class="mini-list">
+                  <li>신분증, 송금 확인, 최종 walkthrough</li>
+                  <li>집 상태 사진 남기기</li>
+                  <li>첫날 필요한 짐만 따로 이동</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="timeline-item">
+              <div class="date-box">+7일</div>
+              <div class="time-content">
+                <strong>정착 마무리</strong>
+                <ul class="mini-list">
+                  <li>DMV / 차량 등록 / 각종 신청</li>
+                  <li>인터넷 / 가전 / 가구 배치 완료</li>
+                  <li>남은 박스 정리 및 비용 정산</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="right-col" style="display:grid; gap:18px;">
+        <div class="card">
+          <div class="section-title">
+            <h2>이사 예산 계산기</h2>
+            <span class="pill">숫자만 넣으면 합산</span>
+          </div>
+          <div class="budget-grid">
+            <div class="budget-box">
+              <label for="shipping">차량 운송비</label>
+              <input id="shipping" type="number" min="0" placeholder="예: 885" />
+            </div>
+            <div class="budget-box">
+              <label for="flight">항공비</label>
+              <input id="flight" type="number" min="0" placeholder="예: 320" />
+            </div>
+            <div class="budget-box">
+              <label for="hotel">숙박비</label>
+              <input id="hotel" type="number" min="0" placeholder="예: 450" />
+            </div>
+            <div class="budget-box">
+              <label for="moving">이삿짐 / 노동비</label>
+              <input id="moving" type="number" min="0" placeholder="예: 1800" />
+            </div>
+            <div class="budget-box">
+              <label for="utility">유틸리티 시작 비용</label>
+              <input id="utility" type="number" min="0" placeholder="예: 250" />
+            </div>
+            <div class="budget-box">
+              <label for="misc">기타 비용</label>
+              <input id="misc" type="number" min="0" placeholder="예: 300" />
+            </div>
+          </div>
+          <div class="budget-total" id="budgetTotal">총 예상 비용: $0</div>
+          <div class="helper">팁: 이삿날엔 생각보다 자잘한 돈이 새요. 마지막 기타비용 칸이 은근 효자입니다.</div>
+        </div>
+
+        <div class="card">
+          <div class="section-title">
+            <h2>메모</h2>
+            <span class="pill">자동 저장</span>
+          </div>
+          <textarea class="notes" id="notes" placeholder="예: 
+- 클로징 장소: 
+- 보험 담당자 연락처: 
+- 유틸리티 시작일: 
+- 고양이 이동 준비물 추가 구매 필요 "></textarea>
+          <div class="btn-row">
+            <button class="primary" id="exportBtn">메모 복사하기</button>
+            <button class="secondary" id="resetBtn">체크리스트 초기화</button>
+          </div>
+          <div class="helper">이 페이지는 브라우저에 자동 저장되도록 만들어져 있어요.</div>
+        </div>
+
+        <div class="card">
+          <div class="section-title">
+            <h2>빠른 우선순위</h2>
+            <span class="pill">먼저 끝내면 편한 것들</span>
+          </div>
+          <ul class="mini-list">
+            <li>보험 먼저 끝내기</li>
+            <li>유틸리티 시작일 미리 예약하기</li>
+            <li>큰 짐만 이동하고 나머지는 과감히 정리하기</li>
+            <li>첫날 필요 물건은 절대 박스 깊숙이 넣지 않기</li>
+            <li>클로징 전후 일정은 하루 정도 여유 두기</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <div class="footer-tip">Made for a smoother Texas move. 덜 헤매고, 덜 까먹고, 덜 멘붕 오게 🙂</div>
+  </div>
+
+  <script>
+    const taskInputs = [...document.querySelectorAll('[data-task]')];
+    const progressText = document.getElementById('progressText');
+    const progressSub = document.getElementById('progressSub');
+    const progressBar = document.getElementById('progressBar');
+    const notes = document.getElementById('notes');
+    const budgetIds = ['shipping', 'flight', 'hotel', 'moving', 'utility', 'misc'];
+    const budgetTotal = document.getElementById('budgetTotal');
+    const exportBtn = document.getElementById('exportBtn');
+    const resetBtn = document.getElementById('resetBtn');
+
+    function updateProgress() {
+      const done = taskInputs.filter(input => input.checked).length;
+      const total = taskInputs.length;
+      const percent = Math.round((done / total) * 100);
+
+      progressText.textContent = `${percent}%`;
+      progressSub.textContent = `${done} / ${total}개 완료`;
+      progressBar.style.width = `${percent}%`;
+
+      taskInputs.forEach(input => {
+        input.closest('.task').classList.toggle('done', input.checked);
+      });
+
+      localStorage.setItem('txMoveTasks', JSON.stringify(taskInputs.map(i => i.checked)));
+    }
+
+    function updateBudget() {
+      const total = budgetIds.reduce((sum, id) => {
+        const value = Number(document.getElementById(id).value || 0);
+        return sum + value;
+      }, 0);
+
+      budgetTotal.textContent = `총 예상 비용: $${total.toLocaleString()}`;
+
+      const budgetState = {};
+      budgetIds.forEach(id => budgetState[id] = document.getElementById(id).value);
+      localStorage.setItem('txMoveBudget', JSON.stringify(budgetState));
+    }
+
+    function loadState() {
+      const savedTasks = JSON.parse(localStorage.getItem('txMoveTasks') || '[]');
+      taskInputs.forEach((input, index) => {
+        input.checked = Boolean(savedTasks[index]);
+      });
+
+      const savedBudget = JSON.parse(localStorage.getItem('txMoveBudget') || '{}');
+      budgetIds.forEach(id => {
+        if (savedBudget[id] !== undefined) {
+          document.getElementById(id).value = savedBudget[id];
+        }
+      });
+
+      notes.value = localStorage.getItem('txMoveNotes') || '';
+      updateProgress();
+      updateBudget();
+    }
+
+    taskInputs.forEach(input => input.addEventListener('change', updateProgress));
+    budgetIds.forEach(id => document.getElementById(id).addEventListener('input', updateBudget));
+
+    notes.addEventListener('input', () => {
+      localStorage.setItem('txMoveNotes', notes.value);
+    });
+
+    exportBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(notes.value || '메모가 아직 비어 있어요.');
+        exportBtn.textContent = '복사 완료!';
+        setTimeout(() => exportBtn.textContent = '메모 복사하기', 1400);
+      } catch {
+        alert('복사에 실패했어요. 메모를 직접 선택해서 복사해 주세요.');
+      }
+    });
+
+    resetBtn.addEventListener('click', () => {
+      taskInputs.forEach(input => input.checked = false);
+      updateProgress();
+    });
+
+    loadState();
+  </script>
+</body>
+</html>
