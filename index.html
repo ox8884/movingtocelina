@@ -2690,6 +2690,9 @@
       'txMoveCalendarCollapsed',
       'txMoveScheduleEvents'
     ];
+    const PLANNER_API_BASE = 'http://<YOUR_ORACLE_VM_IP_OR_HOST>:3000';
+    const PLANNER_API_URL = `${PLANNER_API_BASE.replace(/\/$/, '')}/data`;
+    const PLANNER_SYNC_INTERVAL_MS = 5000;
     const TASK_STORAGE_REVISION_KEY = 'txMoveStorageRevision';
     const TASK_SYNC_CHANNEL = 'txMovePlannerRealtimeSync';
     const taskSyncId = `tab-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
@@ -2697,6 +2700,10 @@
       ? new BroadcastChannel(TASK_SYNC_CHANNEL)
       : null;
     let lastSeenStorageRevision = '';
+    let lastServerRevision = '';
+    let plannerSyncTimer = null;
+    let plannerPollTimer = null;
+    let isApplyingRemoteState = false;
     let storagePollTimer = null;
     const costFormatter = new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -2941,6 +2948,105 @@
     }
 
     let pendingStorageRefresh = null;
+    const STORAGE_REWRITE_PREFIX = 'txMove';
+    const originalSetItem = localStorage.setItem.bind(localStorage);
+    const originalRemoveItem = localStorage.removeItem.bind(localStorage);
+
+    function queuePlannerSync() {
+      if (plannerSyncTimer) {
+        clearTimeout(plannerSyncTimer);
+      }
+      plannerSyncTimer = setTimeout(() => {
+        persistPlannerDataToServer('local-change');
+      }, 220);
+    }
+
+    localStorage.setItem = function(key, value) {
+      const normalizedValue = value == null ? '' : String(value);
+      originalSetItem.call(this, key, normalizedValue);
+      if (!isApplyingRemoteState && String(key).startsWith(STORAGE_REWRITE_PREFIX)) {
+        queuePlannerSync();
+      }
+    };
+
+    localStorage.removeItem = function(key) {
+      originalRemoveItem.call(this, key);
+      if (!isApplyingRemoteState && String(key).startsWith(STORAGE_REWRITE_PREFIX)) {
+        queuePlannerSync();
+      }
+    };
+
+    function buildPlannerPayload() {
+      const storage = {};
+      TASK_STORAGE_KEYS.forEach(key => {
+        storage[key] = localStorage.getItem(key);
+      });
+      storage.txMoveTaskState = localStorage.getItem('txMoveTaskState') || '[]';
+      storage.txMoveNotes = localStorage.getItem('txMoveNotes') || '';
+      return {
+        updatedAt: Date.now(),
+        storage
+      };
+    }
+
+    async function persistPlannerDataToServer(_source = 'local-change') {
+      try {
+        const body = buildPlannerPayload();
+        const res = await fetch(PLANNER_API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+
+        if (!res.ok) {
+          return;
+        }
+
+        const result = await res.json().catch(() => ({}));
+        if (result?.updatedAt) {
+          lastServerRevision = String(result.updatedAt);
+        }
+      } catch {
+        // silent
+      }
+    }
+
+    async function loadPlannerDataFromServer(force = false) {
+      if (isApplyingRemoteState) return;
+
+      try {
+        const res = await fetch(`${PLANNER_API_URL}?ts=${Date.now()}`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const result = await res.json();
+        const remoteRevision = String(result?.updatedAt || '');
+        if (!force && remoteRevision && remoteRevision === lastServerRevision) return;
+
+        const storage = result?.storage || {};
+        if (!storage || typeof storage !== 'object' || !Object.keys(storage).length) return;
+
+        isApplyingRemoteState = true;
+        TASK_STORAGE_KEYS.forEach(key => {
+          if (!Object.prototype.hasOwnProperty.call(storage, key)) {
+            return;
+          }
+          const value = storage[key];
+          if (value === null || value === undefined) {
+            localStorage.removeItem(key);
+            return;
+          }
+          localStorage.setItem(key, String(value));
+        });
+        isApplyingRemoteState = false;
+
+        lastServerRevision = remoteRevision || `${Date.now()}`;
+        if (force || !document.hidden) {
+          loadState();
+        }
+      } catch {
+        isApplyingRemoteState = false;
+      }
+    }
+
     function notifyStorageSync(source = 'local') {
       const revision = `${Date.now()}-${taskSyncId}-${source}`;
       localStorage.setItem(TASK_STORAGE_REVISION_KEY, revision);
@@ -2967,6 +3073,13 @@
     function startStoragePoll() {
       if (storagePollTimer) return;
       storagePollTimer = window.setInterval(pollForStorageSync, 2500);
+    }
+
+    function startPlannerSyncPoll() {
+      if (plannerPollTimer) return;
+      plannerPollTimer = window.setInterval(() => {
+        loadPlannerDataFromServer();
+      }, PLANNER_SYNC_INTERVAL_MS);
     }
 
     function isEditingTaskInline() {
@@ -4709,6 +4822,11 @@
       }
     });
 
+    async function initializePlannerState() {
+      await loadPlannerDataFromServer(true);
+      loadState();
+    }
+
     resetBtn.addEventListener('click', () => {
       const taskInputs = getTaskInputs();
       taskInputs.forEach(input => {
@@ -4725,6 +4843,7 @@
 
     window.addEventListener('visibilitychange', () => {
       if (!document.hidden) {
+        loadPlannerDataFromServer();
         scheduleStorageRefresh();
       } else {
         persistTaskState();
@@ -4734,6 +4853,7 @@
     });
 
     window.addEventListener('focus', () => {
+      loadPlannerDataFromServer();
       scheduleStorageRefresh();
     });
 
@@ -4760,7 +4880,10 @@
     }
 
     startStoragePoll();
-    loadState();
+    startPlannerSyncPoll();
+    initializePlannerState().catch(() => {
+      loadState();
+    });
   </script>
 </body>
 </html>
