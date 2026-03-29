@@ -204,6 +204,63 @@
       margin-top: 6px;
     }
 
+    .hero-calendar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .hero-calendar-header h3 {
+      margin: 0;
+      font-size: 17px;
+      letter-spacing: -0.02em;
+      min-width: 0;
+    }
+
+    .calendar-toggle {
+      min-height: 34px;
+      padding: 0 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      background: rgba(255, 255, 255, 0.16);
+      color: #fff6ef;
+      font-size: 12px;
+      font-weight: 800;
+      transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+      cursor: pointer;
+    }
+
+    .calendar-toggle:hover {
+      transform: translateY(-1px);
+      border-color: rgba(255, 255, 255, 0.45);
+      background: rgba(255, 255, 255, 0.24);
+    }
+
+    .calendar-toggle:focus-visible {
+      outline: 2px solid rgba(255, 207, 180, 0.85);
+      outline-offset: 2px;
+    }
+
+    .hero-calendar-body {
+      overflow: hidden;
+      max-height: 2000px;
+      opacity: 1;
+      transition:
+        max-height 0.32s ease,
+        opacity 0.22s ease,
+        margin-top 0.22s ease;
+      margin-top: 0;
+    }
+
+    .hero-calendar-body.collapsed {
+      max-height: 0;
+      opacity: 0;
+      margin-top: -6px;
+      pointer-events: none;
+    }
+
     .hero-calendar .checklist-calendar {
       margin-top: 8px;
       padding: 16px;
@@ -244,6 +301,7 @@
       background: linear-gradient(135deg, #ffcfb4, #f7a67d);
       color: #4f220d;
       box-shadow: 0 12px 26px rgba(247, 166, 125, 0.24);
+      min-width: 210px;
     }
 
     .hero-action.ghost {
@@ -1737,41 +1795,47 @@
           <a class="hero-action ghost" href="#budgetSection">예산 바로 입력하기</a>
         </div>
         <section class="hero-calendar">
-          <div class="checklist-calendar">
-            <div class="calendar-toolbar">
-              <button id="prevScheduleMonth" class="secondary" type="button" aria-label="이전 월">◀</button>
-              <h3 id="scheduleMonthLabel">일정 캘린더</h3>
-              <button id="nextScheduleMonth" class="secondary" type="button" aria-label="다음 월">▶</button>
-            </div>
-            <div class="calendar-sync">
-              <div id="googleCalendarStatus" class="helper">구글 캘린더 미연결</div>
-              <div class="calendar-sync-actions">
-                <button id="googleConnectBtn" class="secondary" type="button">구글 캘린더 연결</button>
-                <button id="googleSyncBtn" class="secondary" type="button" disabled>동기화</button>
-                <button id="googleDisconnectBtn" class="secondary" type="button" hidden>연결 해제</button>
+          <div class="hero-calendar-header">
+            <h3>일정 캘린더</h3>
+            <button id="calendarToggle" class="calendar-toggle" type="button" aria-expanded="true">캘린더 접기</button>
+          </div>
+          <div class="hero-calendar-body" id="calendarBody">
+            <div class="checklist-calendar">
+              <div class="calendar-toolbar">
+                <button id="prevScheduleMonth" class="secondary" type="button" aria-label="이전 월">◀</button>
+                <h3 id="scheduleMonthLabel">일정 캘린더</h3>
+                <button id="nextScheduleMonth" class="secondary" type="button" aria-label="다음 월">▶</button>
               </div>
-            </div>
-            <div class="calendar-day-names" aria-hidden="true">
-              <span>일</span>
-              <span>월</span>
-              <span>화</span>
-              <span>수</span>
-              <span>목</span>
-              <span>금</span>
-              <span>토</span>
-            </div>
-            <div id="scheduleGrid" class="calendar-grid" role="grid" aria-label="달력"></div>
+              <div class="calendar-sync">
+                <div id="googleCalendarStatus" class="helper">구글 캘린더 미연결</div>
+                <div class="calendar-sync-actions">
+                  <button id="googleConnectBtn" class="secondary" type="button">구글 캘린더 연결</button>
+                  <button id="googleSyncBtn" class="secondary" type="button" disabled>동기화</button>
+                  <button id="googleDisconnectBtn" class="secondary" type="button" hidden>연결 해제</button>
+                </div>
+              </div>
+              <div class="calendar-day-names" aria-hidden="true">
+                <span>일</span>
+                <span>월</span>
+                <span>화</span>
+                <span>수</span>
+                <span>목</span>
+                <span>금</span>
+                <span>토</span>
+              </div>
+              <div id="scheduleGrid" class="calendar-grid" role="grid" aria-label="달력"></div>
 
-            <div class="schedule-date-header">
-              <h4 id="selectedDateLabel">선택한 날짜</h4>
-              <div class="helper" id="selectedDateEventsMeta">날짜를 눌러 할 일을 입력해 주세요.</div>
-            </div>
+              <div class="schedule-date-header">
+                <h4 id="selectedDateLabel">선택한 날짜</h4>
+                <div class="helper" id="selectedDateEventsMeta">날짜를 눌러 할 일을 입력해 주세요.</div>
+              </div>
 
-            <div class="schedule-add">
-              <input id="scheduleInput" type="text" placeholder="이날 할 일/약속/메모 입력" />
-              <button id="addScheduleBtn" class="primary" type="button">추가</button>
+              <div class="schedule-add">
+                <input id="scheduleInput" type="text" placeholder="이날 할 일/약속/메모 입력" />
+                <button id="addScheduleBtn" class="primary" type="button">추가</button>
+              </div>
+              <div id="scheduleList" class="schedule-list"></div>
             </div>
-            <div id="scheduleList" class="schedule-list"></div>
           </div>
         </section>
       </div>
@@ -1796,19 +1860,24 @@
         </label>
         <div class="hero-meta-grid">
           <div class="hero-meta-card">
-            <span>남은 할 일</span>
-            <strong id="remainingCount">10개</strong>
-            <small>끝낼수록 압박이 줄어듭니다.</small>
+            <span>다음 포커스</span>
+            <strong id="kpiNextFocus">-</strong>
+            <small>가장 먼저 끝낼 항목</small>
           </div>
           <div class="hero-meta-card">
-            <span>급한 항목</span>
-            <strong id="urgentCount">3개</strong>
-            <small>먼저 처리해야 막히지 않습니다.</small>
+            <span>이번 주 마감</span>
+            <strong id="kpiThisWeekDue">0개</strong>
+            <small>7일 내 마감 예정</small>
           </div>
-          <div class="hero-meta-card" style="grid-column: 1 / -1;">
-            <span>다음 포커스</span>
-            <strong id="nextFocus">클로징 일정과 준비물 최종 확인</strong>
-            <small>아직 안 끝난 항목 중 가장 우선순위가 높은 일</small>
+          <div class="hero-meta-card">
+            <span>남은 비용</span>
+            <strong id="kpiRemainingCost">$0.00</strong>
+            <small>현재 남은 미완료 예상비용</small>
+          </div>
+          <div class="hero-meta-card">
+            <span>D-Day</span>
+            <strong id="kpiDday">D-day 미설정</strong>
+            <small>이사 날짜 기준 카운트</small>
           </div>
         </div>
       </aside>
@@ -2417,9 +2486,10 @@
     const summaryMoveDate = document.getElementById('summaryMoveDate');
     const summaryDday = document.getElementById('summaryDday');
     const checklistMeta = document.getElementById('checklistMeta');
-    const remainingCount = document.getElementById('remainingCount');
-    const urgentCount = document.getElementById('urgentCount');
-    const nextFocus = document.getElementById('nextFocus');
+    const kpiNextFocus = document.getElementById('kpiNextFocus');
+    const kpiThisWeekDue = document.getElementById('kpiThisWeekDue');
+    const kpiRemainingCost = document.getElementById('kpiRemainingCost');
+    const kpiDday = document.getElementById('kpiDday');
     const summaryFocus = document.getElementById('summaryFocus');
     const customTaskTitle = document.getElementById('customTaskTitle');
     const customTaskDesc = document.getElementById('customTaskDesc');
@@ -2446,6 +2516,8 @@
     const moveDateInput = document.getElementById('moveDateInput');
     const moveDateDisplay = document.getElementById('moveDateDisplay');
     const dDayDisplay = document.getElementById('dDayDisplay');
+    const calendarToggle = document.getElementById('calendarToggle');
+    const calendarBody = document.getElementById('calendarBody');
     const budgetIds = ['shipping', 'flight', 'hotel', 'moving', 'utility', 'misc'];
     const budgetTotal = document.getElementById('budgetTotal');
     const budgetHero = document.getElementById('budgetHero');
@@ -2493,6 +2565,7 @@
     let googleAccessToken = '';
     let googleTokenExpiresAt = 0;
     let googleTokenClient;
+    const CALENDAR_COLLAPSE_KEY = 'txMoveCalendarCollapsed';
     const GOOGLE_CLIENT_ID = '624469211510-2g9kd4udf2rh0iv4ge1lqsm083r186ck.apps.googleusercontent.com';
     const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/calendar';
     const TASK_SOON_DAYS = 7;
@@ -2616,6 +2689,17 @@
       googleDisconnectBtn.hidden = !googleCalendarConnected;
     }
 
+    function setCalendarCollapsedState(collapsed, save = true) {
+      if (!calendarBody || !calendarToggle) return;
+      const isCollapsed = Boolean(collapsed);
+      calendarBody.classList.toggle('collapsed', isCollapsed);
+      calendarToggle.setAttribute('aria-expanded', String(!isCollapsed));
+      calendarToggle.textContent = isCollapsed ? '캘린더 펼치기' : '캘린더 접기';
+      if (save) {
+        localStorage.setItem(CALENDAR_COLLAPSE_KEY, isCollapsed ? '1' : '0');
+      }
+    }
+
     function normalizeTaskSection(section) {
       return taskSectionKeys.includes(section) ? section : 'before-move';
     }
@@ -2679,6 +2763,35 @@
       const todayKey = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const dueKey = new Date(target.getFullYear(), target.getMonth(), target.getDate());
       return Math.round((dueKey - todayKey) / 86400000);
+    }
+
+    function getThisWeekEndDateCount(tasks, referenceDate = new Date()) {
+      const today = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+      const dayOfWeek = today.getDay();
+      const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      const weekStart = new Date(today);
+      weekStart.setDate(today.getDate() + mondayOffset);
+      weekStart.setHours(0, 0, 0, 0);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      weekEnd.setHours(23, 59, 59, 999);
+
+      return tasks.reduce((count, task) => {
+        const checkbox = task.querySelector('[data-task]');
+        if (checkbox?.checked) {
+          return count;
+        }
+
+        const dueDate = getTaskDueDateString(task);
+        if (!dueDate) return count;
+
+        const [year, month, day] = dueDate.split('-').map(Number);
+        const target = new Date(year, month - 1, day);
+        if (Number.isNaN(target.getTime())) {
+          return count;
+        }
+        return target >= weekStart && target <= weekEnd ? count + 1 : count;
+      }, 0);
     }
 
     function getTaskDueStatus(dueDate) {
@@ -3204,7 +3317,7 @@
       if (!events.length) {
         const empty = document.createElement('div');
         empty.className = 'helper';
-        empty.textContent = '등록된 일정이 없습니다. 입력 후 엔터 또는 추가 버튼을 눌러주세요.';
+        empty.textContent = '등록된 일정이 없습니다. 상단 입력창에서 추가해 주세요.';
         scheduleList.appendChild(empty);
         return;
       }
@@ -3455,6 +3568,9 @@
       dDayDisplay.textContent = dday;
       summaryMoveDate.textContent = formattedDate;
       summaryDday.textContent = dday;
+      if (kpiDday) {
+        kpiDday.textContent = dday;
+      }
 
       if (save) {
         localStorage.setItem('txMoveMoveDate', dateString || '');
@@ -3660,9 +3776,19 @@
       summaryPercent.textContent = `${percent}%`;
       progressBadge.textContent = `${done} / ${total} 완료`;
       checklistMeta.textContent = `${done} / ${total} 완료`;
-      remainingCount.textContent = formatCountLabel(remaining);
-      urgentCount.textContent = formatCountLabel(pendingUrgentCount);
-      nextFocus.textContent = nextTaskTitle;
+      if (kpiNextFocus) {
+        kpiNextFocus.textContent = nextTaskTitle;
+      }
+      if (kpiThisWeekDue) {
+        const thisWeekDue = getThisWeekEndDateCount(tasks);
+        kpiThisWeekDue.textContent = formatCountLabel(thisWeekDue);
+      }
+      if (kpiRemainingCost) {
+        kpiRemainingCost.textContent = formatEstimatedCost(remainCost);
+      }
+      if (kpiDday) {
+        kpiDday.textContent = dDayDisplay?.textContent || 'D-day 미설정';
+      }
       summaryFocus.textContent = shortNextTask;
       progressBar.style.width = `${percent}%`;
       progressRing.style.setProperty('--progress-angle', `${percent * 3.6}deg`);
@@ -3814,6 +3940,7 @@
       const savedMoveDate = localStorage.getItem('txMoveMoveDate') || '';
       const savedScheduleDate = localStorage.getItem('txMoveSelectedScheduleDate');
       const savedGoogleConnected = localStorage.getItem('txMoveGoogleConnected') === '1';
+      const savedCalendarCollapsed = localStorage.getItem(CALENDAR_COLLAPSE_KEY) === '1';
 
       if (savedScheduleDate && /^\d{4}-\d{2}-\d{2}$/.test(savedScheduleDate)) {
         selectedScheduleDate = savedScheduleDate;
@@ -3822,6 +3949,7 @@
           scheduleCursorDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
         }
       }
+      setCalendarCollapsedState(savedCalendarCollapsed, false);
 
       calendarEvents = getCalendarEvents();
       setGoogleConnectedState(false);
@@ -3941,6 +4069,13 @@
 
       event.preventDefault();
     });
+
+    if (calendarToggle) {
+      calendarToggle.addEventListener('click', () => {
+        const isCollapsed = calendarBody?.classList.contains('collapsed');
+        setCalendarCollapsedState(!isCollapsed);
+      });
+    }
 
     prevScheduleMonthBtn.addEventListener('click', async () => {
       scheduleCursorDate = new Date(
