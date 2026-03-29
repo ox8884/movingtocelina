@@ -5942,6 +5942,7 @@
       if (event.target.matches('[data-task]')) {
         console.log('[Planner Sync Trigger] task done state changed');
         const before = getStateSnapshotFromDOM('task-check-before');
+        persistTaskState('user-check');
         updateProgress();
         const after = getStateSnapshotFromDOM('task-check-after');
         setLastStateMutationSource('taskCheckToggle', 'user-check');
