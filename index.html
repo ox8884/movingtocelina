@@ -2053,6 +2053,10 @@
               <span>Notes</span>
               <strong id="serverSyncNotes">없음</strong>
             </div>
+            <div class="row">
+              <span>마지막 상태 변경</span>
+              <strong id="lastStateMutationSource">-</strong>
+            </div>
           </div>
         </div>
       </aside>
@@ -2712,6 +2716,7 @@
     const serverSyncTaskCount = document.getElementById('serverSyncTaskCount');
     const serverSyncCustomCount = document.getElementById('serverSyncCustomCount');
     const serverSyncNotes = document.getElementById('serverSyncNotes');
+    const lastStateMutationSourceEl = document.getElementById('lastStateMutationSource');
     const beforeMoveList = document.querySelector('[data-task-section="before-move"]');
     const movingWeekList = document.querySelector('[data-task-section="moving-week"]');
     const afterMoveList = document.querySelector('[data-task-section="after-move"]');
@@ -2782,6 +2787,8 @@
     let localSyncInProgress = false;
     let isHydratingInitialState = false;
     let hasCompletedInitialLoad = false;
+    let lastStateMutationSource = 'none';
+    let hasTemplateBootstrapRun = false;
     let plannerSyncTimer = null;
     let plannerSyncReason = '';
     let plannerPollTimer = null;
@@ -3014,7 +3021,131 @@
       return fallback || '';
     }
 
-    function logTaskDebugState() {}
+    function getStateSnapshotFromStorage() {
+      const planner = getPlannerPayloadFromStorage();
+      const tasks = Array.isArray(planner.tasks) ? planner.tasks : [];
+      return {
+        moveDate: planner.moveDate || '',
+        taskCount: tasks.length,
+        checkedTaskCount: tasks.filter(task => task?.done).length,
+        notesLength: typeof planner.notes === 'string' ? planner.notes.length : String(planner.notes || '').length,
+        updatedAt: Number(planner.updatedAt) || Date.now(),
+        lastServerRevision,
+        localLastModifiedAt,
+        isHydratingInitialState,
+        isApplyingRemoteState,
+        hasCompletedInitialLoad,
+        localSyncInProgress
+      };
+    }
+
+    function getStateSnapshotFromDOM(label = '') {
+      const tasks = getAllTaskCards();
+      const checked = tasks.filter(task => task.querySelector('[data-task]')?.checked).length;
+      return {
+        label,
+        moveDate: moveDateInput?.value || '',
+        taskCount: tasks.length,
+        checkedTaskCount: checked,
+        notesLength: (notes?.value || '').length,
+        updatedAt: Date.now(),
+        lastServerRevision,
+        localLastModifiedAt,
+        isHydratingInitialState,
+        isApplyingRemoteState,
+        hasCompletedInitialLoad,
+        localSyncInProgress
+      };
+    }
+
+    function diffStateSummary(before = {}, after = {}) {
+      return {
+        moveDate: { before: before.moveDate || '', after: after.moveDate || '' },
+        taskCount: { before: before.taskCount || 0, after: after.taskCount || 0 },
+        checkedTaskCount: { before: before.checkedTaskCount || 0, after: after.checkedTaskCount || 0 },
+        notesLength: { before: before.notesLength || 0, after: after.notesLength || 0 },
+        flags: {
+          before: {
+            isHydratingInitialState: before.isHydratingInitialState,
+            isApplyingRemoteState: before.isApplyingRemoteState,
+            hasCompletedInitialLoad: before.hasCompletedInitialLoad,
+            localSyncInProgress: before.localSyncInProgress
+          },
+          after: {
+            isHydratingInitialState: after.isHydratingInitialState,
+            isApplyingRemoteState: after.isApplyingRemoteState,
+            hasCompletedInitialLoad: after.hasCompletedInitialLoad,
+            localSyncInProgress: after.localSyncInProgress
+          }
+        }
+      };
+    }
+
+    function setLastStateMutationSource(functionName, reason, details = {}) {
+      lastStateMutationSource = `${functionName}(${reason})`;
+      if (lastStateMutationSourceEl) {
+        lastStateMutationSourceEl.textContent = `마지막 상태 변경: ${lastStateMutationSource}`;
+      }
+      console.log('[Planner Mutation] source', {
+        functionName,
+        reason,
+        ...details
+      });
+    }
+
+    function hasPlannerMeaningfulUserData(planner = {}) {
+      const tasks = Array.isArray(planner.tasks) ? planner.tasks : [];
+      const customTasks = Array.isArray(planner.customTasks) ? planner.customTasks : [];
+      const budget = planner.budget && typeof planner.budget === 'object' ? planner.budget : {};
+      const notes = typeof planner.notes === 'string' ? planner.notes : String(planner.notes || '');
+      const moveDate = (planner.moveDate || '').trim();
+      const schedule = planner.schedule && typeof planner.schedule === 'object' ? planner.schedule : {};
+      const hasBudgetValue = hasNonEmptyObjectValue(budget);
+      const hasMeaningfulTaskState = tasks.some(task => {
+        if (!task || typeof task !== 'object') return false;
+        return Boolean(task.done) ||
+          task.isCustom === true ||
+          normalizeEstimatedCost(task.estimatedCost) > 0 ||
+          (task.visitUrl || '').trim().length > 0 ||
+          (task.dueDate || '').trim().length > 0 ||
+          (task.desc || '').trim().length > 0;
+      });
+      const hasCustomTasks = customTasks.length > 0;
+      const hasSchedule = String(schedule.selectedDate || '').trim().length > 0;
+      const hasScheduleEvents = schedule.events && typeof schedule.events === 'object' && Object.keys(schedule.events).length > 0;
+      return (
+        hasMeaningfulTaskState ||
+        hasCustomTasks ||
+        hasBudgetValue ||
+        notes.trim().length > 0 ||
+        moveDate.length > 0 ||
+        hasSchedule ||
+        hasScheduleEvents
+      );
+    }
+
+    function logStateMutation(functionName, reason, summarySource = 'auto', extra = {}) {
+      const before = extra.before || {};
+      const after = extra.after || {};
+      const context = getStateSnapshotFromDOM();
+      const diff = diffStateSummary(before, after);
+      console.log(`[Planner Mutation] ${functionName}`, {
+        source: summarySource,
+        reason,
+        moveDate: context.moveDate,
+        taskCount: context.taskCount,
+        checkedTaskCount: context.checkedTaskCount,
+        notesLength: context.notesLength,
+        updatedAt: context.updatedAt,
+        lastServerRevision: context.lastServerRevision,
+        localLastModifiedAt: context.localLastModifiedAt,
+        isHydratingInitialState: context.isHydratingInitialState,
+        isApplyingRemoteState: context.isApplyingRemoteState,
+        hasCompletedInitialLoad: context.hasCompletedInitialLoad,
+        localSyncInProgress: context.localSyncInProgress,
+        diff
+      });
+    }
 
     let pendingStorageRefresh = null;
     const STORAGE_REWRITE_PREFIX = 'txMove';
@@ -3022,22 +3153,29 @@
     const originalRemoveItem = localStorage.removeItem.bind(localStorage);
 
     function queuePlannerSync() {
+      const before = getStateSnapshotFromDOM('queue-before');
       if (isHydratingInitialState || !hasCompletedInitialLoad) {
         console.log('[Planner Sync] POST blocked because hydration not finished', {
           hydrationState: isHydratingInitialState,
           hasCompletedInitialLoad
         });
+        setLastStateMutationSource('queuePlannerSync', 'hydration-not-finished');
+        logStateMutation('queuePlannerSync', 'blocked', 'remote-block', { before, after: before, reasonTag: 'hydration-not-finished' });
         return;
       }
 
       localLastModifiedAt = Date.now();
       localSyncInProgress = true;
       setPlannerSyncStatus('동기화 진행 중', false);
+      setLastStateMutationSource('queuePlannerSync', 'local-change-queue', { reason: 'local change', plannerSyncReason });
       updateServerSyncCard(getPlannerPayloadFromStorage(), '', '동기화 진행 중');
+      const after = getStateSnapshotFromDOM('queue-after');
+      logStateMutation('queuePlannerSync', 'local-change', 'state', { before, after });
       if (plannerSyncTimer) {
         clearTimeout(plannerSyncTimer);
       }
       plannerSyncTimer = setTimeout(() => {
+        setLastStateMutationSource('persistPlannerDataToServer', `debounced-${plannerSyncReason || 'local-change'}`);
         persistPlannerDataToServer('local-change');
       }, 220);
     }
@@ -3071,25 +3209,7 @@
     }
 
     function isPlannerPayloadDefaultOrEmpty(planner = {}) {
-      const tasks = Array.isArray(planner.tasks) ? planner.tasks : [];
-      const customTasks = Array.isArray(planner.customTasks) ? planner.customTasks : [];
-      const budget = planner.budget && typeof planner.budget === 'object' ? planner.budget : {};
-      const notes = typeof planner.notes === 'string' ? planner.notes : String(planner.notes || '');
-      const schedule = planner.schedule && typeof planner.schedule === 'object' ? planner.schedule : {};
-      const hasBudgetValue = hasNonEmptyObjectValue(budget);
-      const hasSelectedDate = typeof schedule.selectedDate === 'string' && schedule.selectedDate.trim().length > 0;
-      const hasScheduleEvents = schedule.events && typeof schedule.events === 'object' && Object.keys(schedule.events).length > 0;
-      return (
-        (planner.moveDate || '').trim().length === 0 &&
-        (planner.theme || 'light') === 'light' &&
-        notes.trim().length === 0 &&
-        tasks.length === 0 &&
-        customTasks.length === 0 &&
-        !hasBudgetValue &&
-        !hasSelectedDate &&
-        !hasScheduleEvents &&
-        !Boolean(schedule.calendarCollapsed)
-      );
+      return !hasPlannerMeaningfulUserData(planner);
     }
 
     function updateServerSyncCard(plannerData = {}, updatedAt = '', syncState = '대기 중') {
@@ -3211,9 +3331,19 @@
     }
 
     function applyPlannerStateToLocalStorage(planner = {}) {
+      const source = plannerSyncReason || 'remote-get';
       if (!planner || typeof planner !== 'object') {
+        setLastStateMutationSource('applyPlannerStateToLocalStorage', 'invalid-planner');
+        logStateMutation('applyPlannerStateToLocalStorage', 'invalid-planner', 'remote-get', {
+          before: getStateSnapshotFromStorage(),
+          after: getStateSnapshotFromStorage()
+        });
         return;
       }
+      setLastStateMutationSource('applyPlannerStateToLocalStorage', source);
+      isHydratingInitialState = true;
+      isApplyingRemoteState = true;
+      const beforeWrite = getStateSnapshotFromStorage();
 
       const moveDate = planner.moveDate || '';
       const notes = planner.notes || '';
@@ -3241,24 +3371,30 @@
       const events = safeParseJsonObject(schedule.events, {});
 
       const nextRevisionKey = `txMoveStorageRevision-migrated-${Date.now()}`;
-      isApplyingRemoteState = true;
-      localStorage.setItem('txMoveMoveDate', String(moveDate));
-      localStorage.setItem('txMoveNotes', String(notes));
-      localStorage.setItem('txMoveTheme', theme);
-      localStorage.setItem('txMoveTaskState', JSON.stringify(tasks));
-      localStorage.setItem('txMoveTasks', JSON.stringify(tasks.map(task => Boolean(task?.done))));
-      localStorage.setItem('txMoveCustomTasks', JSON.stringify(customTasks));
-      localStorage.setItem('txMoveBudget', JSON.stringify(budget));
-      localStorage.setItem('txMoveGoogleConnected', planner.googleConnected === true ? '1' : '');
-      localStorage.setItem(CALENDAR_COLLAPSE_KEY, calendarCollapsed ? '1' : '0');
-      localStorage.setItem('txMoveSelectedScheduleDate', String(selectedDate));
-      localStorage.setItem('txMoveScheduleEvents', JSON.stringify(events));
-      localStorage.setItem(TASK_STORAGE_REVISION_KEY, nextRevisionKey);
-      isApplyingRemoteState = false;
+      try {
+        localStorage.setItem('txMoveMoveDate', String(moveDate));
+        localStorage.setItem('txMoveNotes', String(notes));
+        localStorage.setItem('txMoveTheme', theme);
+        localStorage.setItem('txMoveTaskState', JSON.stringify(tasks));
+        localStorage.setItem('txMoveTasks', JSON.stringify(tasks.map(task => Boolean(task?.done))));
+        localStorage.setItem('txMoveCustomTasks', JSON.stringify(customTasks));
+        localStorage.setItem('txMoveBudget', JSON.stringify(budget));
+        localStorage.setItem('txMoveGoogleConnected', planner.googleConnected === true ? '1' : '');
+        localStorage.setItem(CALENDAR_COLLAPSE_KEY, calendarCollapsed ? '1' : '0');
+        localStorage.setItem('txMoveSelectedScheduleDate', String(selectedDate));
+        localStorage.setItem('txMoveScheduleEvents', JSON.stringify(events));
+        localStorage.setItem(TASK_STORAGE_REVISION_KEY, nextRevisionKey);
+      } finally {
+        const after = getStateSnapshotFromStorage();
+        logStateMutation('applyPlannerStateToLocalStorage', source, 'remote-get', { before: beforeWrite, after });
+        isApplyingRemoteState = false;
+        isHydratingInitialState = false;
+      }
     }
 
     async function persistPlannerDataToServer(_source = 'local-change') {
       const postStartedAt = Date.now();
+      const before = getStateSnapshotFromStorage();
       const localRevisionAtRequest = localLastModifiedAt || postStartedAt;
       const payload = buildPlannerPayload();
       const planner = payload.planner || {};
@@ -3269,6 +3405,8 @@
           hydrationState: isHydratingInitialState,
           hasCompletedInitialLoad
         });
+        setLastStateMutationSource('persistPlannerDataToServer', 'hydration-not-finished');
+        logStateMutation('persistPlannerDataToServer', 'blocked', 'local-block', { before, after: before });
         localSyncInProgress = false;
         localLastModifiedAt = 0;
         plannerSyncReason = '';
@@ -3281,6 +3419,12 @@
           plannerTaskCount: Array.isArray(planner.tasks) ? planner.tasks.length : 0,
           customTaskCount: Array.isArray(planner.customTasks) ? planner.customTasks.length : 0,
           hasBudgetValue: hasNonEmptyObjectValue(planner.budget && typeof planner.budget === 'object' ? planner.budget : {})
+        });
+        setLastStateMutationSource('persistPlannerDataToServer', 'empty-default');
+        logStateMutation('persistPlannerDataToServer', 'blocked', 'local-block', {
+          before,
+          after: before,
+          reason: 'empty-default'
         });
         setPlannerSyncStatus('초기/기본 상태는 서버에 저장하지 않습니다.', false);
         updateServerSyncCard(planner, payload.updatedAt, '대기 중');
@@ -3295,6 +3439,7 @@
         source: _source,
         localLastModifiedAt
       });
+      setLastStateMutationSource('persistPlannerDataToServer', 'user-change-allowed');
 
       try {
         console.log('[Planner Sync] POST /data start', {
@@ -3302,15 +3447,12 @@
           localLastModifiedAt,
           hasPlanner: !!payload?.planner
         });
-        console.log('[Planner Sync] POST /data body ready', {
-          hasPlanner: !!payload?.planner,
-          hasStorage: !!payload?.storage
-        });
         const summary = buildPlannerPayloadSummary(payload);
         console.log(`[Planner Sync] POST /data`, {
           method: 'POST',
           url: PLANNER_API_URL,
-          payload: summary
+          payload: summary,
+          startedAt: postStartedAt
         });
         const res = await fetch(PLANNER_API_URL, {
           method: 'POST',
@@ -3324,13 +3466,19 @@
             status: res.status,
             responseText
           });
+          setLastStateMutationSource('persistPlannerDataToServer', 'post-failed');
+          logStateMutation('persistPlannerDataToServer', 'post-failed', 'error', { before, after: before });
           setPlannerSyncStatus(`서버 저장 실패: HTTP ${res.status}`, true);
           updateServerSyncCard({}, '', '마지막 저장 실패');
+          localSyncInProgress = false;
+          localLastModifiedAt = 0;
+          plannerSyncReason = '';
           return;
         }
 
         const result = await res.json().catch(() => ({}));
         const remoteRevision = Number(result?.updatedAt) || 0;
+        const after = getStateSnapshotFromStorage();
         if (remoteRevision) {
           lastServerRevision = String(remoteRevision);
           const planner = result?.planner && typeof result.planner === 'object'
@@ -3344,6 +3492,7 @@
           localLastModifiedAt = 0;
           plannerSyncReason = '';
         }
+        logStateMutation('persistPlannerDataToServer', 'success', 'server-save', { before, after });
         console.log('[Planner Sync] POST /data success', {
           startedAt: postStartedAt,
           updatedAt: remoteRevision || payload.updatedAt,
@@ -3352,6 +3501,8 @@
         setPlannerSyncStatus('');
       } catch (error) {
         console.error('[Planner Sync] POST /data exception', error);
+        setLastStateMutationSource('persistPlannerDataToServer', 'exception');
+        logStateMutation('persistPlannerDataToServer', 'exception', 'error', { before, after: before });
         setPlannerSyncStatus(`서버 저장 실패: ${error.message || '네트워크 오류'}`, true);
         updateServerSyncCard({}, '', '마지막 저장 실패');
         localSyncInProgress = false;
@@ -3360,10 +3511,18 @@
     }
 
     async function loadPlannerDataFromServer(force = false) {
-      if (isApplyingRemoteState) return;
+      if (isApplyingRemoteState) {
+        setLastStateMutationSource('loadPlannerDataFromServer', 'remote-apply-in-progress');
+        logStateMutation('loadPlannerDataFromServer', 'blocked', 'remote-apply', {
+          before: getStateSnapshotFromStorage(),
+          after: getStateSnapshotFromStorage()
+        });
+        return;
+      }
 
       const getStartedAt = Date.now();
       lastSyncRequestAt = getStartedAt;
+      setLastStateMutationSource('loadPlannerDataFromServer', 'start');
       console.log('[Planner Sync] GET /data start', {
         startedAt: getStartedAt,
         localLastModifiedAt,
@@ -3380,6 +3539,7 @@
         const result = await res.json();
         const remoteRevision = Number(result?.updatedAt) || 0;
         const planner = result?.planner || getPlannerFromLegacyStorage(result?.storage);
+        const beforeApply = getStateSnapshotFromStorage();
         console.log('[Planner Sync] GET /data response', {
           status: res.status,
           updatedAt: remoteRevision,
@@ -3403,6 +3563,12 @@
             remoteUpdatedAt: remoteRevisionNum,
             localLastModifiedAt
           });
+          setLastStateMutationSource('loadPlannerDataFromServer', 'ignore-local-in-progress');
+          logStateMutation('loadPlannerDataFromServer', 'ignored', 'remote-response', {
+            before: beforeApply,
+            after: beforeApply,
+            reason: 'local change in progress'
+          });
           return;
         }
 
@@ -3411,6 +3577,12 @@
             reason: 'not newer than last applied',
             remoteUpdatedAt: remoteRevisionNum,
             lastRemoteAppliedAt
+          });
+          setLastStateMutationSource('loadPlannerDataFromServer', 'ignore-older-than-applied');
+          logStateMutation('loadPlannerDataFromServer', 'ignored', 'remote-response', {
+            before: beforeApply,
+            after: beforeApply,
+            reason: 'not newer than last applied'
           });
           return;
         }
@@ -3421,37 +3593,45 @@
             remoteUpdatedAt: remoteRevisionNum,
             lastRemoteAppliedAt: lastRemoteNum
           });
+          setLastStateMutationSource('loadPlannerDataFromServer', 'ignore-older-revision');
+          logStateMutation('loadPlannerDataFromServer', 'ignored', 'remote-response', {
+            before: beforeApply,
+            after: beforeApply,
+            reason: 'older remote revision'
+          });
           return;
         }
 
         const legacyStorage = result?.storage;
-        const hasPlannerPayload = planner && typeof planner === 'object' &&
-          (Array.isArray(planner.tasks) && planner.tasks.length > 0 ||
-           Array.isArray(planner.customTasks) && planner.customTasks.length > 0 ||
-           (planner.notes || '').length > 0 ||
-           (typeof planner.budget === 'object' && planner.budget && Object.keys(planner.budget).length > 0) ||
-           (planner.moveDate || '').length > 0);
+        const hasPlannerPayload = hasPlannerMeaningfulUserData(planner);
 
         if (!hasPlannerPayload) {
+          const reason = hasRemoteData ? 'empty planner payload' : 'empty response';
           if (!force) {
-            if (hasRemoteData) {
-              console.log('[Planner Sync] GET /data ignored', {
-                reason: 'empty planner payload',
-                remoteUpdatedAt: remoteRevisionNum
-              });
-            } else {
-              console.log('[Planner Sync] GET /data ignored', {
-                reason: 'empty response',
-                remoteUpdatedAt: remoteRevisionNum
-              });
-            }
+            console.log('[Planner Sync] GET /data ignored', {
+              reason,
+              remoteUpdatedAt: remoteRevisionNum
+            });
+            setLastStateMutationSource('loadPlannerDataFromServer', reason);
+            logStateMutation('loadPlannerDataFromServer', 'ignored', 'remote-response', {
+              before: beforeApply,
+              after: beforeApply,
+              reason
+            });
             return;
           }
           setPlannerSyncStatus('서버 데이터가 비어 있습니다. 로컬 데이터로 동작합니다.', false);
+          setLastStateMutationSource('loadPlannerDataFromServer', 'empty-response-force');
+          logStateMutation('loadPlannerDataFromServer', 'empty', 'remote-response', {
+            before: beforeApply,
+            after: beforeApply,
+            reason
+          });
           return;
         }
 
         applyPlannerStateToLocalStorage(planner);
+        const afterApply = getStateSnapshotFromStorage();
         if (!result?.planner && legacyStorage && typeof legacyStorage === 'object' && Object.keys(legacyStorage).length > 0) {
           setPlannerSyncStatus('서버 데이터 구조를 새 형식으로 마이그레이션했습니다.');
         }
@@ -3462,15 +3642,25 @@
           localSyncInProgress = false;
           localLastModifiedAt = 0;
         }
-        console.log('[Planner Sync] GET /data applied to UI state');
+        logStateMutation('loadPlannerDataFromServer', 'applied', 'remote-get', { before: beforeApply, after: afterApply });
+        setLastStateMutationSource('loadPlannerDataFromServer', 'applied');
+        console.log('[Planner Sync] GET /data applied to UI state', {
+          updatedAt: remoteRevisionNum,
+          taskCount: Array.isArray(planner?.tasks) ? planner.tasks.length : 0
+        });
         setPlannerSyncStatus('');
         if (force || !document.hidden) {
-          loadState();
+          loadState('remote-get');
           setPlannerSyncStatus('서버 데이터 반영됨');
         }
       } catch (error) {
         isApplyingRemoteState = false;
-        console.error(error);
+        console.error('[Planner Sync] GET /data exception', error);
+        setLastStateMutationSource('loadPlannerDataFromServer', 'failed');
+        logStateMutation('loadPlannerDataFromServer', 'exception', 'error', {
+          before: getStateSnapshotFromStorage(),
+          after: getStateSnapshotFromStorage()
+        });
         setPlannerSyncStatus(`데이터 불러오기 실패: ${error.message || '네트워크 오류'}`, true);
         updateServerSyncCard({}, '', '마지막 불러오기 실패');
         console.log('[Planner Sync] GET /data failed', {
@@ -4463,6 +4653,7 @@
     }
 
     function updateMoveDate(dateString, save = true) {
+      const before = getStateSnapshotFromDOM('move-date-before');
       const formattedDate = formatMoveDate(dateString);
       const dday = getDdayLabel(dateString);
 
@@ -4481,10 +4672,13 @@
         localStorage.setItem('txMoveMoveDate', dateString || '');
         notifyStorageSync('move-date');
       }
-      logTaskDebugState('move-date-update');
+      const after = getStateSnapshotFromDOM('move-date-after');
+      setLastStateMutationSource('updateMoveDate', 'user-input');
+      logStateMutation('updateMoveDate', 'move-date-update', 'user', { before, after });
     }
 
     function persistTaskState() {
+      const before = getStateSnapshotFromStorage();
       const taskState = [...taskList.querySelectorAll('.task')].map(task => {
         const id = task.dataset.taskId || generateTaskId();
         const checkbox = task.querySelector('[data-task]');
@@ -4534,7 +4728,10 @@
         })))
       );
       notifyStorageSync('persist');
-      logTaskDebugState('persist');
+      const after = getStateSnapshotFromStorage();
+      const reason = plannerSyncReason || 'persist';
+      setLastStateMutationSource('persistTaskState', reason);
+      logStateMutation('persistTaskState', reason, 'local-storage-write', { before, after });
     }
 
     function createTaskElement({
@@ -4643,6 +4840,7 @@
     }
 
     function updateProgress({ suppressSort = false } = {}) {
+      const before = getStateSnapshotFromDOM('progress-before');
       if (!suppressSort) {
         sortAllTaskSections();
       }
@@ -4719,9 +4917,13 @@
       taskDoneCost.textContent = formatEstimatedCost(doneCost);
       taskRemainCost.textContent = formatEstimatedCost(remainCost);
       persistTaskState();
+      const after = getStateSnapshotFromDOM('progress-after');
+      setLastStateMutationSource('updateProgress', 'state-render');
+      logStateMutation('updateProgress', 'render', 'ui-render', { before, after });
     }
 
     function updateBudget() {
+      const before = getStateSnapshotFromDOM('budget-before');
       const total = budgetIds.reduce((sum, id) => {
         const value = Number(document.getElementById(id).value || 0);
         return sum + value;
@@ -4737,6 +4939,10 @@
       });
       localStorage.setItem('txMoveBudget', JSON.stringify(budgetState));
       notifyStorageSync('budget');
+      const after = getStateSnapshotFromDOM('budget-after');
+      const reason = plannerSyncReason || 'budget';
+      setLastStateMutationSource('updateBudget', reason);
+      logStateMutation('updateBudget', reason, 'local-storage-write', { before, after });
     }
 
     function applyTaskStateToTask(task, state) {
@@ -4793,7 +4999,9 @@
       }
     }
 
-    function loadState() {
+    function loadState(reason = 'loadState') {
+      const before = getStateSnapshotFromDOM('load-before');
+      setLastStateMutationSource('loadState', reason);
       const savedTaskState = getSavedTaskState();
       const hasSavedTaskState = savedTaskState.size > 0;
       const savedCustomTasks = JSON.parse(localStorage.getItem('txMoveCustomTasks') || '[]');
@@ -4885,8 +5093,15 @@
       }
 
       const hasState = getSavedTaskState().size > 0;
-      if (!hasState) {
+      const localPlanner = getPlannerPayloadFromStorage();
+      const hasMeaningfulLocalPlannerState = hasPlannerMeaningfulUserData(localPlanner);
+      const shouldBootstrapDefaultTasks = !hasState && !hasTemplateBootstrapRun && !hasMeaningfulLocalPlannerState;
+      if (shouldBootstrapDefaultTasks) {
         persistTaskState();
+        hasTemplateBootstrapRun = true;
+        setLastStateMutationSource('loadState', 'template-bootstrap-init');
+      } else if (!hasState) {
+        setLastStateMutationSource('loadState', 'template-bootstrap-skipped');
       }
 
       const savedBudget = JSON.parse(localStorage.getItem('txMoveBudget') || '{}');
@@ -4928,7 +5143,8 @@
       updateMoveDate(savedMoveDate, false);
       updateProgress();
       updateBudget();
-      logTaskDebugState('loadState');
+      const after = getStateSnapshotFromDOM('load-after');
+      logStateMutation('loadState', reason, 'ui-render', { before, after });
     }
 
     taskList.addEventListener('change', event => {
@@ -4970,7 +5186,11 @@
 
       if (event.target.matches('[data-task]')) {
         console.log('[Planner Sync Trigger] task done state changed');
+        const before = getStateSnapshotFromDOM('task-check-before');
         updateProgress();
+        const after = getStateSnapshotFromDOM('task-check-after');
+        setLastStateMutationSource('taskCheckToggle', 'user');
+        logStateMutation('taskCheckToggle', 'checked', 'user', { before, after });
       }
     });
 
@@ -5051,9 +5271,13 @@
       const removeBtn = event.target.closest('[data-remove-custom]');
       if (!removeBtn) return;
 
+      const before = getStateSnapshotFromDOM('custom-task-delete-before');
       removeBtn.closest('.task')?.remove();
       persistTaskState();
       updateProgress();
+      const after = getStateSnapshotFromDOM('custom-task-delete-after');
+      setLastStateMutationSource('deleteCustomTask', 'user');
+      logStateMutation('deleteCustomTask', 'deleted', 'user', { before, after });
 
       return;
     });
@@ -5193,6 +5417,7 @@
     });
 
     addTaskBtn.addEventListener('click', () => {
+      const before = getStateSnapshotFromDOM('custom-task-add-before');
       console.log('[Planner Sync Trigger] custom task added');
       const title = customTaskTitle.value.trim();
       const desc = customTaskDesc.value.trim();
@@ -5233,6 +5458,9 @@
       persistTaskState();
       updateProgress();
       customTaskTitle.focus();
+      const after = getStateSnapshotFromDOM('custom-task-add-after');
+      setLastStateMutationSource('addCustomTask', 'user');
+      logStateMutation('addCustomTask', 'added', 'user', { before, after });
     });
 
     budgetIds.forEach(id => {
@@ -5254,9 +5482,13 @@
     });
 
     notes.addEventListener('input', () => {
+      const before = getStateSnapshotFromDOM('notes-before');
       console.log('[Planner Sync Trigger] notes changed');
       localStorage.setItem('txMoveNotes', notes.value);
       notifyStorageSync('notes');
+      const after = getStateSnapshotFromDOM('notes-after');
+      setLastStateMutationSource('notes', 'input');
+      logStateMutation('notesInput', 'notes', 'user', { before, after });
     });
 
     exportBtn.addEventListener('click', async () => {
@@ -5273,14 +5505,19 @@
 
     async function initializePlannerState() {
       const initStartAt = Date.now();
+      const before = getStateSnapshotFromDOM('init-before');
       isHydratingInitialState = true;
+      setLastStateMutationSource('initializePlannerState', 'start');
       console.log('[Planner Sync] initial load start', { startedAt: initStartAt });
       try {
         await loadPlannerDataFromServer(true);
-        loadState();
+        loadState('initial-load');
       } finally {
         isHydratingInitialState = false;
         hasCompletedInitialLoad = true;
+        setLastStateMutationSource('initializePlannerState', 'end');
+        const after = getStateSnapshotFromDOM('init-after');
+        logStateMutation('initializePlannerState', 'initial-load', 'ui-render', { before, after });
         console.log('[Planner Sync] initial load end', {
           endedAt: Date.now(),
           hasCompletedInitialLoad,
