@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>페이지 이동 중</title>
+    <script>
+      (function() {
+        const fallback = "/movingtocelina/";
+        const path = window.location.pathname;
+
+        if (path === "/movingtocelina" || path === "/movingtocelina/") {
+          window.location.replace(fallback);
+          return;
+        }
+
+        const legacyPaths = [
+          "/Texas%20moving",
+          "/Texas%20moving/",
+          "/Texas%20moving/index.html",
+          "/Texas moving",
+          "/Texas moving/",
+          "/Texas moving/index.html"
+        ];
+
+        if (legacyPaths.includes(path) || path.startsWith("/Texas%20moving/") || path.startsWith("/Texas moving/")) {
+          window.location.replace(fallback);
+          return;
+        }
+
+        window.location.replace(fallback + "#");
+      })();
+    </script>
+  </head>
+  <body>
+    <p>요청한 페이지를 찾을 수 없어 시작 화면으로 이동합니다.</p>
+  </body>
+</html>
