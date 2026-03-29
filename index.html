@@ -692,6 +692,180 @@
       outline: none;
     }
 
+    .checklist-calendar {
+      margin-top: 12px;
+      padding: 18px;
+      border-radius: 24px;
+      background: linear-gradient(135deg, rgba(255, 238, 225, 0.84), rgba(255, 250, 243, 0.94));
+      border: 1px solid rgba(198, 93, 46, 0.14);
+      box-shadow: 0 12px 28px rgba(75, 52, 27, 0.08);
+    }
+
+    .calendar-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .calendar-toolbar h3 {
+      margin: 0;
+      font-size: 17px;
+      letter-spacing: -0.02em;
+      flex: 1;
+      min-width: 0;
+      text-align: center;
+    }
+
+    .calendar-toolbar .secondary {
+      width: 38px;
+      min-height: 38px;
+      padding: 0;
+    }
+
+    .calendar-day-names {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 14px;
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      text-align: center;
+    }
+
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .calendar-day,
+    .calendar-day-placeholder {
+      min-height: 40px;
+      border-radius: 12px;
+      border: 1px solid rgba(75, 52, 27, 0.15);
+      background: rgba(255, 255, 255, 0.88);
+      display: grid;
+      place-items: center;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .calendar-day {
+      cursor: pointer;
+      position: relative;
+      transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+      outline: none;
+      appearance: none;
+      padding: 0;
+      width: 100%;
+    }
+
+    .calendar-day:hover,
+    .calendar-day:focus-visible {
+      transform: translateY(-1px);
+      border-color: rgba(198, 93, 46, 0.5);
+      background: rgba(255, 255, 255, 1);
+    }
+
+    .calendar-day.selected {
+      background: var(--accent);
+      border-color: var(--accent-strong);
+      color: #fff;
+    }
+
+    .calendar-day.today {
+      box-shadow: inset 0 0 0 1px rgba(198, 93, 46, 0.6);
+    }
+
+    .calendar-day.has-events::after {
+      content: "";
+      position: absolute;
+      inset: auto auto 6px 50%;
+      width: 5px;
+      height: 5px;
+      background: currentColor;
+      border-radius: 50%;
+      transform: translateX(-50%);
+      opacity: 0.82;
+    }
+
+    .calendar-day.placeholder {
+      border-color: transparent;
+      background: transparent;
+      cursor: default;
+      pointer-events: none;
+    }
+
+    .calendar-day-placeholder {
+      border-color: transparent;
+      background: transparent;
+      cursor: default;
+      min-height: 36px;
+    }
+
+    .schedule-list {
+      margin-top: 14px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .schedule-date-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin: 12px 0 8px;
+    }
+
+    .schedule-date-header h4 {
+      margin: 0;
+      font-size: 15px;
+      letter-spacing: -0.01em;
+    }
+
+    .schedule-date-header .helper {
+      margin: 0;
+    }
+
+    .schedule-item {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: start;
+      gap: 8px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(75, 52, 27, 0.13);
+      background: rgba(255, 255, 255, 0.8);
+    }
+
+    .schedule-item p {
+      margin: 0;
+      line-height: 1.6;
+      font-size: 13px;
+    }
+
+    .schedule-item button {
+      min-height: 30px;
+      padding: 0 12px;
+      border-radius: 999px;
+      font-size: 11px;
+      background: rgba(194, 65, 45, 0.1);
+      color: var(--danger);
+    }
+
+    .schedule-add {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: minmax(0, 1fr) auto;
+      margin-top: 10px;
+    }
+
     .add-task-panel,
     .accent-card {
       margin-top: 16px;
@@ -982,11 +1156,24 @@
 
     body[data-theme="dark"] .progress-strip,
     body[data-theme="dark"] .add-task-panel,
+    body[data-theme="dark"] .checklist-calendar,
     body[data-theme="dark"] .budget-total,
     body[data-theme="dark"] .date-box {
       background: linear-gradient(135deg, rgba(55, 41, 31, 0.94), rgba(32, 26, 22, 0.94));
       border-color: rgba(255, 238, 220, 0.08);
       color: #f7e7d9;
+    }
+
+    body[data-theme="dark"] .calendar-day,
+    body[data-theme="dark"] .schedule-item {
+      background: rgba(22, 18, 15, 0.95);
+      border-color: rgba(255, 238, 220, 0.12);
+      color: var(--text);
+    }
+
+    body[data-theme="dark"] .calendar-day:hover,
+    body[data-theme="dark"] .calendar-day:focus-visible {
+      background: rgba(28, 23, 18, 0.98);
     }
 
     body[data-theme="dark"] .progress-wrap {
@@ -1096,8 +1283,19 @@
 
       .hero-action-row,
       .btn-row,
-      .add-task-actions {
+      .add-task-actions,
+      .schedule-add {
         justify-content: stretch;
+      }
+
+      .schedule-add .primary {
+        width: 100%;
+      }
+
+      .calendar-day,
+      .calendar-day-placeholder {
+        min-height: 36px;
+        font-size: 12px;
       }
 
       .hero-action,
@@ -1215,6 +1413,35 @@
             <p>이사 전에 놓치기 쉬운 큰 덩어리들만 먼저 모았습니다. 완료 체크는 바로 저장됩니다.</p>
           </div>
           <span class="pill">Browser Save On</span>
+        </div>
+
+        <div class="checklist-calendar">
+          <div class="calendar-toolbar">
+            <button id="prevScheduleMonth" class="secondary" type="button" aria-label="이전 월">◀</button>
+            <h3 id="scheduleMonthLabel">일정 캘린더</h3>
+            <button id="nextScheduleMonth" class="secondary" type="button" aria-label="다음 월">▶</button>
+          </div>
+          <div class="calendar-day-names" aria-hidden="true">
+            <span>일</span>
+            <span>월</span>
+            <span>화</span>
+            <span>수</span>
+            <span>목</span>
+            <span>금</span>
+            <span>토</span>
+          </div>
+          <div id="scheduleGrid" class="calendar-grid" role="grid" aria-label="달력"></div>
+
+          <div class="schedule-date-header">
+            <h4 id="selectedDateLabel">선택한 날짜</h4>
+            <div class="helper" id="selectedDateEventsMeta">날짜를 눌러 할 일을 입력해 주세요.</div>
+          </div>
+
+          <div class="schedule-add">
+            <input id="scheduleInput" type="text" placeholder="이날 할 일/약속/메모 입력" />
+            <button id="addScheduleBtn" class="primary" type="button">추가</button>
+          </div>
+          <div id="scheduleList" class="schedule-list"></div>
         </div>
 
         <div class="progress-strip">
@@ -1529,6 +1756,15 @@
     const customTaskDesc = document.getElementById('customTaskDesc');
     const customTaskPriority = document.getElementById('customTaskPriority');
     const addTaskBtn = document.getElementById('addTaskBtn');
+    const prevScheduleMonthBtn = document.getElementById('prevScheduleMonth');
+    const nextScheduleMonthBtn = document.getElementById('nextScheduleMonth');
+    const scheduleMonthLabel = document.getElementById('scheduleMonthLabel');
+    const scheduleGrid = document.getElementById('scheduleGrid');
+    const selectedDateLabel = document.getElementById('selectedDateLabel');
+    const selectedDateEventsMeta = document.getElementById('selectedDateEventsMeta');
+    const scheduleInput = document.getElementById('scheduleInput');
+    const addScheduleBtn = document.getElementById('addScheduleBtn');
+    const scheduleList = document.getElementById('scheduleList');
     const notes = document.getElementById('notes');
     const moveDateInput = document.getElementById('moveDateInput');
     const moveDateDisplay = document.getElementById('moveDateDisplay');
@@ -1544,6 +1780,10 @@
       mid: { text: '중요', className: 'mid', rank: 1 },
       low: { text: '일반', className: 'low', rank: 2 }
     };
+    const today = new Date();
+    let scheduleCursorDate = new Date(today.getFullYear(), today.getMonth(), 1);
+    let selectedScheduleDate = toDateKey(today);
+    let calendarEvents = {};
 
     function generateTaskId() {
       return `task-${Math.random().toString(36).slice(2, 8)}-${Date.now().toString(36)}`;
@@ -1553,8 +1793,165 @@
       return (value || '').replace(/\n/g, ' ').trim();
     }
 
+    function toDateKey(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function parseDateKey(dateKey) {
+      const [year, month, day] = dateKey.split('-').map(Number);
+      if (!year || !month || !day) return null;
+      return new Date(year, month - 1, day);
+    }
+
+    function formatDateLabel(dateKey) {
+      const parsed = parseDateKey(dateKey);
+      if (!parsed) return '';
+
+      return new Intl.DateTimeFormat('ko-KR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        weekday: 'short'
+      }).format(parsed);
+    }
+
     function getTaskInputs() {
       return [...taskList.querySelectorAll('[data-task]')];
+    }
+
+    function getCalendarEvents() {
+      const raw = localStorage.getItem('txMoveScheduleEvents');
+      try {
+        const parsed = JSON.parse(raw || '{}');
+        return typeof parsed === 'object' && parsed !== null ? parsed : {};
+      } catch {
+        return {};
+      }
+    }
+
+    function setCalendarEvents(nextState) {
+      calendarEvents = nextState;
+      localStorage.setItem('txMoveScheduleEvents', JSON.stringify(calendarEvents));
+    }
+
+    function getEventsForDate(dateKey) {
+      const list = calendarEvents[dateKey];
+      if (!Array.isArray(list)) return [];
+      return list;
+    }
+
+    function renderScheduleCalendar() {
+      const year = scheduleCursorDate.getFullYear();
+      const month = scheduleCursorDate.getMonth();
+      const firstDay = new Date(year, month, 1);
+      const dayOffset = firstDay.getDay();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const todayKey = toDateKey(today);
+
+      scheduleMonthLabel.textContent = `${year}년 ${String(month + 1).padStart(2, '0')}월`;
+      scheduleGrid.innerHTML = '';
+
+      for (let i = 0; i < dayOffset; i++) {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'calendar-day-placeholder';
+        scheduleGrid.appendChild(placeholder);
+      }
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateObj = new Date(year, month, day);
+        const dateKey = toDateKey(dateObj);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'calendar-day';
+        button.textContent = String(day);
+        button.setAttribute('data-schedule-date', dateKey);
+        button.setAttribute('aria-label', `${dateKey} 일정 ${getEventsForDate(dateKey).length}개`);
+
+        if (dateKey === todayKey) {
+          button.classList.add('today');
+        }
+
+        if (dateKey === selectedScheduleDate) {
+          button.classList.add('selected');
+        }
+
+        if (getEventsForDate(dateKey).length > 0) {
+          button.classList.add('has-events');
+        }
+
+        scheduleGrid.appendChild(button);
+      }
+    }
+
+    function renderScheduleEvents() {
+      const dateLabel = formatDateLabel(selectedScheduleDate) || '날짜를 선택해 주세요.';
+      selectedDateLabel.textContent = dateLabel;
+      const events = getEventsForDate(selectedScheduleDate);
+      const metaCount = `${events.length}개 등록`;
+
+      selectedDateEventsMeta.textContent = selectedScheduleDate
+        ? `${metaCount} / ${selectedDateLabel.textContent}`
+        : '날짜를 선택해 주세요.';
+
+      scheduleList.innerHTML = '';
+
+      if (!events.length) {
+        const empty = document.createElement('div');
+        empty.className = 'helper';
+        empty.textContent = '등록된 일정이 없습니다. 입력 후 엔터 또는 추가 버튼을 눌러주세요.';
+        scheduleList.appendChild(empty);
+        return;
+      }
+
+      events.forEach((item, index) => {
+        const row = document.createElement('div');
+        row.className = 'schedule-item';
+        const text = document.createElement('p');
+        const removeBtn = document.createElement('button');
+        text.textContent = item.text;
+        removeBtn.className = 'secondary';
+        removeBtn.type = 'button';
+        removeBtn.setAttribute('data-remove-schedule', selectedScheduleDate);
+        removeBtn.setAttribute('data-schedule-index', String(index));
+        removeBtn.textContent = '삭제';
+        row.appendChild(text);
+        row.appendChild(removeBtn);
+        scheduleList.appendChild(row);
+      });
+    }
+
+    function addScheduleEvent(text) {
+      const normalized = text.trim();
+      if (!normalized) return;
+
+      const existing = getEventsForDate(selectedScheduleDate).slice();
+      existing.push({ id: `e-${Date.now().toString(36)}`, text: normalized, createdAt: Date.now() });
+
+      const next = { ...calendarEvents };
+      next[selectedScheduleDate] = existing;
+      setCalendarEvents(next);
+      renderScheduleCalendar();
+      renderScheduleEvents();
+    }
+
+    function removeScheduleEvent(dateKey, index) {
+      const events = getEventsForDate(dateKey).slice();
+      if (index < 0 || index >= events.length) return;
+      events.splice(index, 1);
+
+      const next = { ...calendarEvents };
+      if (events.length) {
+        next[dateKey] = events;
+      } else {
+        delete next[dateKey];
+      }
+
+      setCalendarEvents(next);
+      renderScheduleCalendar();
+      renderScheduleEvents();
     }
 
     function setTaskPriority(task, priority) {
@@ -1917,6 +2314,19 @@
 
       const savedTheme = localStorage.getItem('txMoveTheme') || 'light';
       const savedMoveDate = localStorage.getItem('txMoveMoveDate') || '';
+      const savedScheduleDate = localStorage.getItem('txMoveSelectedScheduleDate');
+
+      if (savedScheduleDate && /^\d{4}-\d{2}-\d{2}$/.test(savedScheduleDate)) {
+        selectedScheduleDate = savedScheduleDate;
+        const selectedDate = parseDateKey(savedScheduleDate);
+        if (selectedDate) {
+          scheduleCursorDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+        }
+      }
+
+      calendarEvents = getCalendarEvents();
+      renderScheduleCalendar();
+      renderScheduleEvents();
 
       notes.value = localStorage.getItem('txMoveNotes') || '';
       applyTheme(savedTheme, false);
@@ -2010,6 +2420,64 @@
       }
 
       event.preventDefault();
+    });
+
+    prevScheduleMonthBtn.addEventListener('click', () => {
+      scheduleCursorDate = new Date(
+        scheduleCursorDate.getFullYear(),
+        scheduleCursorDate.getMonth() - 1,
+        1
+      );
+      renderScheduleCalendar();
+    });
+
+    nextScheduleMonthBtn.addEventListener('click', () => {
+      scheduleCursorDate = new Date(
+        scheduleCursorDate.getFullYear(),
+        scheduleCursorDate.getMonth() + 1,
+        1
+      );
+      renderScheduleCalendar();
+    });
+
+    scheduleGrid.addEventListener('click', event => {
+      const dayBtn = event.target.closest('[data-schedule-date]');
+      if (!dayBtn) return;
+
+      selectedScheduleDate = dayBtn.dataset.scheduleDate;
+      localStorage.setItem('txMoveSelectedScheduleDate', selectedScheduleDate);
+      renderScheduleCalendar();
+      renderScheduleEvents();
+      scheduleInput.focus();
+    });
+
+    addScheduleBtn.addEventListener('click', () => {
+      const text = scheduleInput.value;
+      if (!text.trim()) {
+        alert('일정 제목을 입력해 주세요.');
+        scheduleInput.focus();
+        return;
+      }
+
+      addScheduleEvent(text);
+      scheduleInput.value = '';
+      scheduleInput.focus();
+    });
+
+    scheduleInput.addEventListener('keydown', event => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      addScheduleBtn.click();
+    });
+
+    scheduleList.addEventListener('click', event => {
+      const removeBtn = event.target.closest('[data-remove-schedule]');
+      if (!removeBtn) return;
+
+      const dateKey = removeBtn.getAttribute('data-remove-schedule');
+      const index = Number(removeBtn.getAttribute('data-schedule-index'));
+      if (!Number.isFinite(index)) return;
+      removeScheduleEvent(dateKey, index);
     });
 
     addTaskBtn.addEventListener('click', () => {
