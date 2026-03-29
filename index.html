@@ -725,6 +725,53 @@
       color: var(--muted);
     }
 
+    .task-date-summary {
+      align-self: start;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      color: #fff;
+      min-height: 28px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      font-weight: 800;
+      font-size: 12px;
+    }
+
+    .task-date-main {
+      color: #fff;
+      white-space: nowrap;
+    }
+
+    .task-due-dday {
+      color: rgba(255, 255, 255, 0.92);
+      font-size: 11px;
+      white-space: nowrap;
+      letter-spacing: 0.01em;
+    }
+
+    .task-date-summary.overdue {
+      background: rgba(194, 65, 45, 0.2);
+      border-color: rgba(194, 65, 45, 0.46);
+    }
+
+    .task-date-summary.due-today {
+      background: rgba(199, 130, 36, 0.21);
+      border-color: rgba(199, 130, 36, 0.52);
+    }
+
+    .task-date-summary.upcoming {
+      background: rgba(94, 123, 168, 0.2);
+      border-color: rgba(94, 123, 168, 0.42);
+    }
+
+    .task-date-summary.buffer {
+      background: rgba(61, 122, 88, 0.2);
+      border-color: rgba(61, 122, 88, 0.46);
+    }
+
     .task-status {
       margin-left: auto;
       align-self: center;
@@ -742,6 +789,11 @@
       color: var(--text);
     }
 
+    .task-date-summary .task-status {
+      margin-left: 0;
+      white-space: nowrap;
+    }
+
     .task-status.overdue {
       border-color: rgba(194, 65, 45, 0.32);
       background: rgba(194, 65, 45, 0.1);
@@ -754,7 +806,8 @@
       color: var(--warn);
     }
 
-    .task-status.soon {
+    .task-status.soon,
+    .task-status.upcoming {
       border-color: rgba(94, 123, 168, 0.26);
       background: rgba(94, 123, 168, 0.09);
       color: #3f5d88;
@@ -783,10 +836,37 @@
       white-space: nowrap;
     }
 
+    .task[data-priority="high"] {
+      border-left: 8px solid rgba(194, 65, 45, 0.62);
+      box-shadow:
+        0 10px 24px rgba(57, 42, 19, 0.05),
+        inset 0 0 0 1px rgba(194, 65, 45, 0.11);
+    }
+
+    .task[data-priority="mid"] {
+      border-left: 8px solid rgba(199, 130, 36, 0.48);
+      box-shadow:
+        0 10px 24px rgba(57, 42, 19, 0.05),
+        inset 0 0 0 1px rgba(199, 130, 36, 0.11);
+    }
+
+    .task[data-priority="low"] {
+      border-left: 8px solid rgba(61, 122, 88, 0.47);
+      box-shadow:
+        0 10px 24px rgba(57, 42, 19, 0.05),
+        inset 0 0 0 1px rgba(61, 122, 88, 0.11);
+    }
+
     .task-due-label {
-      font-weight: 800;
-      color: var(--text);
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
       white-space: nowrap;
+      border: 0;
     }
 
     .task-due {
@@ -1493,6 +1573,26 @@
 
     body[data-theme="dark"] .task-link:hover {
       background: rgba(255, 255, 255, 0.14);
+    }
+
+    body[data-theme="dark"] .task-date-summary.overdue {
+      background: rgba(194, 65, 45, 0.26);
+      border-color: rgba(255, 184, 162, 0.36);
+    }
+
+    body[data-theme="dark"] .task-date-summary.due-today {
+      background: rgba(199, 130, 36, 0.28);
+      border-color: rgba(248, 187, 73, 0.4);
+    }
+
+    body[data-theme="dark"] .task-date-summary.upcoming {
+      background: rgba(94, 123, 168, 0.3);
+      border-color: rgba(167, 197, 255, 0.44);
+    }
+
+    body[data-theme="dark"] .task-date-summary.buffer {
+      background: rgba(61, 122, 88, 0.28);
+      border-color: rgba(129, 207, 158, 0.4);
     }
 
     @keyframes rise {
@@ -2396,11 +2496,11 @@
         className: 'due-today'
       },
       upcoming: {
-        text: '예정됨',
-        className: 'soon'
+        text: '임박',
+        className: 'upcoming'
       },
       buffer: {
-        text: '여유 있음',
+        text: '예정',
         className: 'buffer'
       }
     };
@@ -2547,21 +2647,28 @@
       return normalizeDateValue(value);
     }
 
-    function getTaskDueStatus(dueDate) {
+    function getTaskDueDiff(dueDate) {
       if (!dueDate) {
-        return TASK_STATUS_CONFIG.buffer;
+        return null;
       }
 
       const [year, month, day] = dueDate.split('-').map(Number);
       if (!year || !month || !day) {
-        return TASK_STATUS_CONFIG.buffer;
+        return null;
       }
 
       const target = new Date(year, month - 1, day);
       const now = new Date();
       const todayKey = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const dueKey = new Date(target.getFullYear(), target.getMonth(), target.getDate());
-      const diffDays = Math.round((dueKey - todayKey) / 86400000);
+      return Math.round((dueKey - todayKey) / 86400000);
+    }
+
+    function getTaskDueStatus(dueDate) {
+      const diffDays = getTaskDueDiff(dueDate);
+      if (diffDays === null) {
+        return TASK_STATUS_CONFIG.buffer;
+      }
 
       if (diffDays < 0) return TASK_STATUS_CONFIG.overdue;
       if (diffDays === 0) return TASK_STATUS_CONFIG.dueToday;
@@ -2569,11 +2676,65 @@
       return TASK_STATUS_CONFIG.buffer;
     }
 
+    function formatDueDateLabel(dueDate) {
+      if (!dueDate) return '';
+
+      const parsed = parseDateKey(dueDate);
+      if (!parsed) return '';
+
+      return new Intl.DateTimeFormat('en-US', {
+        month: 'numeric',
+        day: 'numeric'
+      }).format(parsed);
+    }
+
+    function formatDueDDay(diffDays) {
+      if (diffDays === null) return '날짜 미정';
+      if (diffDays < 0) return `D+${Math.abs(diffDays)}`;
+      if (diffDays === 0) return 'D-day';
+      return `D-${diffDays}`;
+    }
+
+    function updateTaskDueSummary(task) {
+      const dueDate = getTaskDueDateString(task);
+      const status = getTaskDueStatus(dueDate);
+      const diffDays = getTaskDueDiff(dueDate);
+      const dateLabel = dueDate ? formatDueDateLabel(dueDate) : '';
+      const dDayLabel = formatDueDDay(diffDays);
+
+      const titleWrap = task.querySelector(':scope > div');
+      if (!titleWrap) return;
+
+      const titleText = titleWrap.querySelector('.task-title');
+      if (!titleText) return;
+
+      let dueSummary = titleWrap.querySelector('.task-date-summary');
+      if (!dueSummary) {
+        dueSummary = document.createElement('div');
+        dueSummary.className = 'task-date-summary';
+        titleWrap.insertBefore(dueSummary, titleText);
+      }
+
+      dueSummary.classList.remove('overdue', 'due-today', 'upcoming', 'buffer');
+      dueSummary.classList.add(status.className);
+      dueSummary.innerHTML = `
+        <span class="task-date-main">${dateLabel || '날짜 미정'}</span>
+        <span class="task-due-dday">${dDayLabel}</span>
+        <span class="task-status ${status.className}" aria-label="마감 상태">${status.text}</span>
+      `;
+    }
+
     function updateTaskStatusBadge(task) {
       const dueDate = getTaskDueDateString(task);
       const status = getTaskDueStatus(dueDate);
       const taskMeta = task.querySelector('.task-meta');
       if (!taskMeta) return;
+
+      if (task.querySelector('.task-date-summary')) {
+        const existingMetaBadge = taskMeta.querySelector('.task-status');
+        if (existingMetaBadge) existingMetaBadge.remove();
+        return;
+      }
 
       let badge = taskMeta.querySelector('.task-status');
       if (!badge) {
@@ -3121,13 +3282,15 @@
     function setTaskPriority(task, priority) {
       const tag = task.querySelector('.tag');
       const prioritySelect = task.querySelector('.task-priority');
-      const tagMeta = priorityMeta[priority] ? priorityMeta[priority] : priorityMeta.mid;
+      const safePriority = priorityMeta[priority] ? priority : 'mid';
+      const tagMeta = priorityMeta[safePriority];
       if (!tag) return;
+      task.dataset.priority = safePriority;
       tag.className = `tag ${tagMeta.className}`;
       tag.textContent = tagMeta.text;
 
       if (prioritySelect && prioritySelect.options?.length) {
-        prioritySelect.value = priority;
+        prioritySelect.value = safePriority;
       }
     }
 
@@ -3188,6 +3351,7 @@
         prioritySelect.value = currentPriority;
         task.appendChild(prioritySelect);
       }
+      setTaskPriority(task, currentPriority);
 
       const section = normalizeTaskSection(task.dataset.section);
       task.dataset.section = section;
@@ -3205,6 +3369,7 @@
       task.dataset.url = rawUrl;
       updateTaskVisitLink(task);
       updateTaskStatusBadge(task);
+      updateTaskDueSummary(task);
     }
 
     function formatCountLabel(value) {
@@ -3338,6 +3503,7 @@
       taskEl.className = 'task';
       taskEl.dataset.taskId = id || generateTaskId();
       taskEl.dataset.section = normalizeTaskSection(section);
+      taskEl.dataset.priority = safePriority;
       taskEl.dataset.dueDate = safeDueDate;
       taskEl.dataset.estimatedCost = safeEstimatedCost;
       taskEl.dataset.visitUrl = safeVisitUrl;
@@ -3435,6 +3601,7 @@
         const checkbox = task.querySelector('[data-task]');
         task.classList.toggle('done', Boolean(checkbox?.checked));
         updateTaskStatusBadge(task);
+        updateTaskDueSummary(task);
       });
 
       const pendingTasks = tasks
@@ -3533,6 +3700,7 @@
       updateTaskVisitLink(task);
       updateTaskStatusBadge(task);
       updateTaskCostBadge(task);
+      updateTaskDueSummary(task);
 
       const dueInput = task.querySelector('.task-due');
       if (dueInput) {
@@ -3654,6 +3822,7 @@
         const section = normalizeTaskSection(task.dataset.section);
         task.dataset.dueDate = normalizeDateValue(event.target.value);
         updateTaskStatusBadge(task);
+        updateTaskDueSummary(task);
         appendTaskToSection(task, section);
         sortTasksInSection(section);
         persistTaskState();
