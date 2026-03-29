@@ -7,8 +7,9 @@
     <script>
       (function() {
         const path = window.location.pathname;
-        const hasRepoPrefix = path.indexOf('/movingtocelina/') === 0 || path === '/movingtocelina';
-        const fallback = hasRepoPrefix ? '/movingtocelina/' : '/';
+        const legacyTexas = path.includes('/Texas%20moving') || path.includes('/Texas moving');
+        const hasRepoPrefix = path.startsWith('/movingtocelina/') || path === '/movingtocelina' || path === '/movingtocelina/';
+        const fallback = hasRepoPrefix || legacyTexas ? '/movingtocelina/' : '/';
 
         if (path !== fallback && path !== `${fallback}index.html`) {
           window.location.replace(`${window.location.origin}${fallback}`);

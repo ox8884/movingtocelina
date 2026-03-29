@@ -7,7 +7,9 @@
   <script>
     (() => {
       const path = window.location.pathname || '/';
-      const base = path.includes('/movingtocelina/') ? '/movingtocelina/' : '/';
+      const hasRepoPrefix = path.startsWith('/movingtocelina/') || path === '/movingtocelina' || path.startsWith('/movingtocelina/');
+      const legacyTexas = path.includes('/Texas%20moving') || path.includes('/Texas moving');
+      const base = hasRepoPrefix || legacyTexas ? '/movingtocelina/' : '/';
       const target = `${window.location.origin}${base}`;
 
       if (`${window.location.origin}${path}` !== target && `${window.location.origin}${path.replace(/\/index\.html$/, '/')}` !== target) {
