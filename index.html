@@ -641,19 +641,29 @@
       display: grid;
       grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
       align-items: start;
-      gap: 12px;
-      padding: 16px;
+      column-gap: 14px;
+      row-gap: 10px;
+      padding: 16px 18px;
       border-radius: 22px;
       background: rgba(255, 255, 255, 0.54);
       border: 1px solid rgba(75, 52, 27, 0.08);
       box-shadow: 0 10px 24px rgba(57, 42, 19, 0.05);
-      transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+      transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+      min-height: 154px;
     }
 
     .task:hover {
       transform: translateY(-1px);
       border-color: rgba(198, 93, 46, 0.18);
       background: rgba(255, 255, 255, 0.78);
+      box-shadow: 0 16px 30px rgba(57, 42, 19, 0.11);
+    }
+
+    .task > div {
+      min-width: 0;
+      display: grid;
+      gap: 8px;
+      padding: 2px 0;
     }
 
     .task input[type="checkbox"] {
@@ -668,14 +678,16 @@
     .task-title {
       font-size: 16px;
       font-weight: 800;
+      line-height: 1.35;
       letter-spacing: -0.02em;
-      margin-bottom: 6px;
+      margin: 0;
     }
 
     .task-desc {
       font-size: 13px;
-      line-height: 1.6;
+      line-height: 1.55;
       color: var(--muted);
+      margin: 0;
     }
 
     .task-title[contenteditable="true"],
@@ -704,10 +716,10 @@
     }
 
     .task-meta {
-      margin-top: 8px;
+      margin-top: 4px;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 8px 10px;
       flex-wrap: wrap;
       font-size: 12px;
       color: var(--muted);
@@ -718,7 +730,8 @@
       align-self: center;
       display: inline-flex;
       align-items: center;
-      padding: 3px 10px;
+      min-height: 24px;
+      padding: 4px 10px;
       border-radius: 999px;
       font-size: 11px;
       font-weight: 800;
@@ -753,6 +766,23 @@
       color: var(--ok);
     }
 
+    .task-cost {
+      margin-left: auto;
+      align-self: center;
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(75, 52, 27, 0.14);
+      background: rgba(255, 255, 255, 0.82);
+      color: var(--text);
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
     .task-due-label {
       font-weight: 800;
       color: var(--text);
@@ -775,7 +805,7 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-height: 34px;
+      min-height: 30px;
       padding: 0 12px;
       border-radius: 999px;
       font-size: 12px;
@@ -811,7 +841,7 @@
 
     .task-remove {
       align-self: center;
-      min-height: 34px;
+      min-height: 30px;
       padding: 0 12px;
       border: 1px solid rgba(194, 65, 45, 0.18);
       border-radius: 999px;
@@ -820,6 +850,15 @@
       font-size: 12px;
       font-weight: 800;
       cursor: pointer;
+      line-height: 1;
+      transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+      text-wrap: nowrap;
+    }
+
+    .task-remove:hover {
+      transform: translateY(-1px);
+      border-color: rgba(194, 65, 45, 0.28);
+      background: rgba(194, 65, 45, 0.14);
     }
 
     .task-link {
@@ -838,16 +877,19 @@
       align-items: center;
       line-height: 1;
       cursor: pointer;
+      text-wrap: nowrap;
+      transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
     }
 
     .task-link:hover {
       background: rgba(255, 255, 255, 1);
       border-color: rgba(75, 52, 27, 0.28);
+      transform: translateY(-1px);
     }
 
     .task-priority {
       align-self: center;
-      min-height: 34px;
+      min-height: 30px;
       padding: 0 10px;
       border: 1px solid rgba(75, 52, 27, 0.16);
       border-radius: 999px;
@@ -858,6 +900,22 @@
       cursor: pointer;
       appearance: none;
       outline: none;
+      transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+    }
+
+    .task-priority:hover {
+      transform: translateY(-1px);
+      border-color: rgba(75, 52, 27, 0.3);
+      box-shadow: 0 4px 12px rgba(75, 52, 27, 0.12);
+    }
+
+    .task-link,
+    .task-remove,
+    .task-priority,
+    .tag {
+      max-height: 30px;
+      display: inline-flex;
+      align-items: center;
     }
 
     .checklist-calendar {
@@ -1165,7 +1223,7 @@
       border-radius: 14px;
       cursor: pointer;
       font-weight: 800;
-      transition: transform 0.16s ease, opacity 0.16s ease, background 0.16s ease, color 0.16s ease;
+      transition: transform 0.16s ease, opacity 0.16s ease, background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
     }
 
     .primary {
@@ -1427,6 +1485,16 @@
       text-decoration-color: rgba(255, 241, 228, 0.34);
     }
 
+    body[data-theme="dark"] .task-link {
+      background: rgba(19, 16, 14, 0.86);
+      border-color: rgba(255, 238, 220, 0.16);
+      color: #f2d3bf;
+    }
+
+    body[data-theme="dark"] .task-link:hover {
+      background: rgba(255, 255, 255, 0.14);
+    }
+
     @keyframes rise {
       from {
         opacity: 0;
@@ -1474,11 +1542,26 @@
 
       .task {
         grid-template-columns: auto minmax(0, 1fr);
+        gap: 10px;
       }
 
+      .task > div {
+        gap: 7px;
+      }
+
+      .task-meta,
+      .task-meta .task-due,
+      .task-meta .task-status,
+      .task-meta .task-cost {
+        width: 100%;
+      }
+
+      .task-link,
       .tag,
+      .task-priority,
       .task-remove {
-        justify-self: start;
+        grid-column: 2;
+        justify-self: end;
       }
 
       .timeline-item {
@@ -1650,6 +1733,18 @@
         <div class="summary-value" id="budgetHero">$0</div>
         <div class="summary-copy">항공, 운송, 숙박, 유틸리티까지 지금 입력된 총 예상 비용.</div>
       </div>
+
+      <div class="panel summary-panel">
+        <div class="summary-topline">
+          <span>체크리스트 비용</span>
+          <span class="summary-badge">Tasks Cost</span>
+        </div>
+        <div class="summary-copy" id="taskCostSummary">
+          <div>총 예상 비용: <span id="taskTotalCost">$0</span></div>
+          <div>완료된 비용: <span id="taskDoneCost">$0</span></div>
+          <div>남은 비용: <span id="taskRemainCost">$0</span></div>
+        </div>
+      </div>
     </section>
 
     <section class="content-grid">
@@ -1687,7 +1782,7 @@
               </div>
             </div>
             <div class="checklist" data-task-section="before-move">
-              <label class="task" data-section="before-move" data-due-date="2026-08-15">
+              <label class="task" data-section="before-move" data-due-date="2026-08-15" data-estimated-cost="250">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">클로징 일정과 준비물 최종 확인</div>
@@ -1699,7 +1794,7 @@
                 </div>
                 <span class="tag high">급함</span>
               </label>
-              <label class="task" data-section="before-move" data-due-date="2026-08-18">
+              <label class="task" data-section="before-move" data-due-date="2026-08-18" data-estimated-cost="180">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">주택 보험 연결 및 대출 쪽 전달</div>
@@ -1711,11 +1806,11 @@
                 </div>
                 <span class="tag high">급함</span>
               </label>
-              <label class="task" data-section="before-move" data-due-date="2026-08-20">
+              <label class="task" data-section="before-move" data-due-date="2026-08-20" data-estimated-cost="300">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">현재 집 정리 / 판매 준비</div>
-                  <div class="task-desc">정리, 사진, 청소, 수리, 스테이징, 리스팅 일정까지 한 번에 맞추기.</div>
+                  <div class="task-desc">현재 집 정리, 리스팅 사진 보정, 오픈하우스 날짜를 맞춰 방문자 동선까지 정리하세요.</div>
                   <div class="task-meta">
                     <span class="task-due-label">마감일</span>
                     <input type="date" class="task-due" value="2026-08-20" aria-label="마감일" />
@@ -1723,11 +1818,11 @@
                 </div>
                 <span class="tag mid">중요</span>
               </label>
-              <label class="task" data-section="before-move" data-due-date="2026-08-23">
+              <label class="task" data-section="before-move" data-due-date="2026-08-23" data-estimated-cost="220">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">이삿짐 분류: 가져갈 것 / 버릴 것 / 판매할 것</div>
-                  <div class="task-desc">큰 가전, 침대, 박스, TV, 탁구대 등 실제 이동 품목을 먼저 확정.</div>
+                  <div class="task-desc">큰 가전, 가구, 장식품, 고양이 물품을 박스별로 분류해 라벨까지 선행해 두세요.</div>
                   <div class="task-meta">
                     <span class="task-due-label">마감일</span>
                     <input type="date" class="task-due" value="2026-08-23" aria-label="마감일" />
@@ -1735,7 +1830,7 @@
                 </div>
                 <span class="tag mid">중요</span>
               </label>
-              <label class="task" data-section="before-move" data-due-date="2026-08-25" data-url="https://www.ntta.com/toll-tag">
+              <label class="task" data-section="before-move" data-due-date="2026-08-25" data-url="https://www.ntta.com/toll-tag" data-estimated-cost="120">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">차량 이동 계획 확정</div>
@@ -1743,6 +1838,66 @@
                   <div class="task-meta">
                     <span class="task-due-label">마감일</span>
                     <input type="date" class="task-due" value="2026-08-25" aria-label="마감일" />
+                  </div>
+                </div>
+                <span class="tag mid">중요</span>
+              </label>
+              <label class="task" data-section="before-move" data-due-date="2026-08-21" data-estimated-cost="260">
+                <input type="checkbox" data-task />
+                <div>
+                  <div class="task-title">현재 집 청소/수리 마감 점검</div>
+                  <div class="task-desc">클로징 전 마지막 수리 항목, 카펫 세척, 얼룩 처리 여부를 계약 조건과 대조.</div>
+                  <div class="task-meta">
+                    <span class="task-due-label">마감일</span>
+                    <input type="date" class="task-due" value="2026-08-21" aria-label="마감일" />
+                  </div>
+                </div>
+                <span class="tag mid">중요</span>
+              </label>
+              <label class="task" data-section="before-move" data-due-date="2026-08-22" data-estimated-cost="95">
+                <input type="checkbox" data-task />
+                <div>
+                  <div class="task-title">중개인/세탁/정리 업체 마감 정산</div>
+                  <div class="task-desc">청소, 세탁, 정리 업체와 잔액 정산 후 서비스 확인 메시지를 문자 캡처로 저장.</div>
+                  <div class="task-meta">
+                    <span class="task-due-label">마감일</span>
+                    <input type="date" class="task-due" value="2026-08-22" aria-label="마감일" />
+                  </div>
+                </div>
+                <span class="tag low">일반</span>
+              </label>
+              <label class="task" data-section="before-move" data-due-date="2026-08-24" data-estimated-cost="140">
+                <input type="checkbox" data-task />
+                <div>
+                  <div class="task-title">클로징 서류 보안 백업</div>
+                  <div class="task-desc">Closing Disclosure, HUD-1, 보험 인수 서류를 클라우드와 USB 두 경로에 저장.</div>
+                  <div class="task-meta">
+                    <span class="task-due-label">마감일</span>
+                    <input type="date" class="task-due" value="2026-08-24" aria-label="마감일" />
+                  </div>
+                </div>
+                <span class="tag high">급함</span>
+              </label>
+              <label class="task" data-section="before-move" data-due-date="2026-08-26" data-estimated-cost="320">
+                <input type="checkbox" data-task />
+                <div>
+                  <div class="task-title">차량 운송 ETA 확인 및 반입일 고정</div>
+                  <div class="task-desc">운송사 추적번호와 도착 오차 분기를 캘린더에 반영해 플랜 B를 미리 결정.</div>
+                  <div class="task-meta">
+                    <span class="task-due-label">마감일</span>
+                    <input type="date" class="task-due" value="2026-08-26" aria-label="마감일" />
+                  </div>
+                </div>
+                <span class="tag mid">중요</span>
+              </label>
+              <label class="task" data-section="before-move" data-due-date="2026-08-27" data-estimated-cost="110">
+                <input type="checkbox" data-task />
+                <div>
+                  <div class="task-title">고양이 이동 이동장 상태 점검</div>
+                  <div class="task-desc">이동장 통풍구, 탈출 방지 락, 응급 식수 보관량을 최종 점검해 출발 직전 패킹.</div>
+                  <div class="task-meta">
+                    <span class="task-due-label">마감일</span>
+                    <input type="date" class="task-due" value="2026-08-27" aria-label="마감일" />
                   </div>
                 </div>
                 <span class="tag mid">중요</span>
@@ -1764,11 +1919,11 @@
               </div>
             </div>
             <div class="checklist" data-task-section="moving-week">
-              <label class="task" data-section="moving-week" data-due-date="2026-08-28">
+              <label class="task" data-section="moving-week" data-due-date="2026-08-28" data-estimated-cost="190">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">고양이 이동 세팅 준비</div>
-                  <div class="task-desc">이동장, 물, 화장실, 쉬는 공간, 탈출 방지 커버 등 세부 준비물 점검.</div>
+                  <div class="task-desc">고양이 이동장 비상키트와 미리 먹일 사료 분량을 이동용 가방으로 나눠서 준비.</div>
                   <div class="task-meta">
                     <span class="task-due-label">마감일</span>
                     <input type="date" class="task-due" value="2026-08-28" aria-label="마감일" />
@@ -1776,17 +1931,53 @@
                 </div>
                 <span class="tag mid">중요</span>
               </label>
-              <label class="task" data-section="moving-week" data-due-date="2026-09-01" data-url="https://www.powertochoose.org">
+              <label class="task" data-section="moving-week" data-due-date="2026-09-01" data-url="https://www.powertochoose.org" data-estimated-cost="150">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">텍사스 유틸리티 예약</div>
-                  <div class="task-desc">전기, 수도, 인터넷, 쓰레기 서비스 시작일을 입주일에 맞추기.</div>
+                  <div class="task-desc">전기·가스·물·인터넷·쓰레기 서비스 시작일을 입주일 기준으로 조정하고 중복요금 위험 점검.</div>
                   <div class="task-meta">
                     <span class="task-due-label">마감일</span>
                     <input type="date" class="task-due" value="2026-09-01" aria-label="마감일" />
                   </div>
                 </div>
                 <span class="tag high">급함</span>
+              </label>
+              <label class="task" data-section="moving-week" data-due-date="2026-09-01" data-estimated-cost="75">
+                <input type="checkbox" data-task />
+                <div>
+                  <div class="task-title">현재 집 유틸리티 종료 신청</div>
+                  <div class="task-desc">기존 집 전기·물·인터넷 종료일 확정 후 미터 리딩 스크린샷을 정산 폴더에 첨부.</div>
+                  <div class="task-meta">
+                    <span class="task-due-label">마감일</span>
+                    <input type="date" class="task-due" value="2026-09-01" aria-label="마감일" />
+                  </div>
+                </div>
+                <span class="tag mid">중요</span>
+              </label>
+              <label class="task" data-section="moving-week" data-due-date="2026-09-02" data-estimated-cost="220">
+                <input type="checkbox" data-task />
+                <div>
+                  <div class="task-title">입주일 전 주택 전력 재점검</div>
+                  <div class="task-desc">계량기 사진 촬영, 누전차단기 위치, 누수 가능 밸브를 한 번 더 확인해 두면 당황이 줄어요.</div>
+                  <div class="task-meta">
+                    <span class="task-due-label">마감일</span>
+                    <input type="date" class="task-due" value="2026-09-02" aria-label="마감일" />
+                  </div>
+                </div>
+                <span class="tag low">일반</span>
+              </label>
+              <label class="task" data-section="moving-week" data-due-date="2026-08-29" data-estimated-cost="80">
+                <input type="checkbox" data-task />
+                <div>
+                  <div class="task-title">고양이 건강기록 / 마이크로칩 확인</div>
+                  <div class="task-desc">수의사 기록, 백신, 마이크로칩 정보, 향후 병원 연락처를 한 화면으로 요약.</div>
+                  <div class="task-meta">
+                    <span class="task-due-label">마감일</span>
+                    <input type="date" class="task-due" value="2026-08-29" aria-label="마감일" />
+                  </div>
+                </div>
+                <span class="tag mid">중요</span>
               </label>
             </div>
           </section>
@@ -1805,11 +1996,11 @@
               </div>
             </div>
             <div class="checklist" data-task-section="after-move">
-              <label class="task" data-section="after-move" data-due-date="2026-09-03" data-url="https://www.usps.com/manage/forward.htm">
+              <label class="task" data-section="after-move" data-due-date="2026-09-03" data-url="https://www.usps.com/manage/forward.htm" data-estimated-cost="60">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">주소 변경 / 우편 포워딩</div>
-                  <div class="task-desc">은행, 보험, DMV, 카드, 병원, 각종 계정 주소를 한 번에 업데이트.</div>
+                  <div class="task-desc">USPS 변경 외 은행, 보험, 카드, 병원, 학교/진료 기록까지 주소 동기화를 한 번에 처리.</div>
                   <div class="task-meta">
                     <span class="task-due-label">마감일</span>
                     <input type="date" class="task-due" value="2026-09-03" aria-label="마감일" />
@@ -1818,11 +2009,11 @@
                 <span class="tag low">일반</span>
               </label>
 
-              <label class="task" data-section="after-move" data-due-date="2026-09-04" data-url="https://public.txdmv.gov/">
+              <label class="task" data-section="after-move" data-due-date="2026-09-04" data-url="https://public.txdmv.gov/" data-estimated-cost="420">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">텍사스 DMV / 번호판 / 면세 신청 계획 세우기</div>
-                  <div class="task-desc">운전면허, 차량 등록, 번호판, 재산세 관련 일정과 순서를 체크.</div>
+                  <div class="task-desc">운전면허 갱신, 차량 등록, 번호판, 재산세 납부 순서를 체크해 누락 없이 처리.</div>
                   <div class="task-meta">
                     <span class="task-due-label">마감일</span>
                     <input type="date" class="task-due" value="2026-09-04" aria-label="마감일" />
@@ -1830,15 +2021,51 @@
                 </div>
                 <span class="tag mid">중요</span>
               </label>
+              <label class="task" data-section="after-move" data-due-date="2026-09-05" data-estimated-cost="180">
+                <input type="checkbox" data-task />
+                <div>
+                  <div class="task-title">텍사스 차량 등록 및 과세 서류 제출</div>
+                  <div class="task-desc">title, 보험 증빙, odometer, mileage 문구를 점검해 차량 등록 접수 시 누락 없이 제출.</div>
+                  <div class="task-meta">
+                    <span class="task-due-label">마감일</span>
+                    <input type="date" class="task-due" value="2026-09-05" aria-label="마감일" />
+                  </div>
+                </div>
+                <span class="tag high">급함</span>
+              </label>
 
-              <label class="task" data-section="after-move" data-due-date="2026-09-06">
+              <label class="task" data-section="after-move" data-due-date="2026-09-06" data-estimated-cost="140">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">입주 첫날 필수품 가방 따로 준비</div>
-                  <div class="task-desc">충전기, 약, 서류, 고양이 용품, 세면도구, 옷 2~3벌은 따로 보관.</div>
+                  <div class="task-desc">충전기, 약, 서류, 고양이 용품, 세면도구, 옷 2~3벌을 접근성 높은 가방에 분리.</div>
                   <div class="task-meta">
                     <span class="task-due-label">마감일</span>
                     <input type="date" class="task-due" value="2026-09-06" aria-label="마감일" />
+                  </div>
+                </div>
+                <span class="tag low">일반</span>
+              </label>
+              <label class="task" data-section="after-move" data-due-date="2026-09-07" data-url="https://www.tdpr.state.tx.us/" data-estimated-cost="150">
+                <input type="checkbox" data-task />
+                <div>
+                  <div class="task-title">텍사스 거주/세무 변경 신청 정리</div>
+                  <div class="task-desc">주소 신고, 납세 관련 문서, 보험 변경 항목을 마감일순으로 묶어 제출할 목록 확정.</div>
+                  <div class="task-meta">
+                    <span class="task-due-label">마감일</span>
+                    <input type="date" class="task-due" value="2026-09-07" aria-label="마감일" />
+                  </div>
+                </div>
+                <span class="tag mid">중요</span>
+              </label>
+              <label class="task" data-section="after-move" data-due-date="2026-09-07" data-estimated-cost="120">
+                <input type="checkbox" data-task />
+                <div>
+                  <div class="task-title">고양이 적응 루틴 즉시 실행</div>
+                  <div class="task-desc">도착일 당일 고양이 조용한 휴식공간/식사시간/화장실 위치를 고정해 스트레스 완화.</div>
+                  <div class="task-meta">
+                    <span class="task-due-label">마감일</span>
+                    <input type="date" class="task-due" value="2026-09-07" aria-label="마감일" />
                   </div>
                 </div>
                 <span class="tag low">일반</span>
@@ -1874,6 +2101,10 @@
             <label class="field">
               <span>마감일</span>
               <input id="customTaskDueDate" type="date" />
+            </label>
+            <label class="field">
+              <span>예상 비용</span>
+              <input id="customTaskCost" type="number" min="0" step="0.01" placeholder="예: 1200" />
             </label>
             <label class="field">
               <span>바로가기 링크(선택)</span>
@@ -2063,6 +2294,9 @@
     const themeToggle = document.getElementById('themeToggle');
     const progressBadge = document.getElementById('progressBadge');
     const summaryPercent = document.getElementById('summaryPercent');
+    const taskTotalCost = document.getElementById('taskTotalCost');
+    const taskDoneCost = document.getElementById('taskDoneCost');
+    const taskRemainCost = document.getElementById('taskRemainCost');
     const summaryMoveDate = document.getElementById('summaryMoveDate');
     const summaryDday = document.getElementById('summaryDday');
     const checklistMeta = document.getElementById('checklistMeta');
@@ -2075,6 +2309,7 @@
     const customTaskPriority = document.getElementById('customTaskPriority');
     const customTaskSection = document.getElementById('customTaskSection');
     const customTaskDueDate = document.getElementById('customTaskDueDate');
+    const customTaskCost = document.getElementById('customTaskCost');
     const customTaskUrl = document.getElementById('customTaskUrl');
     const addTaskBtn = document.getElementById('addTaskBtn');
     const prevScheduleMonthBtn = document.getElementById('prevScheduleMonth');
@@ -2144,6 +2379,12 @@
     const GOOGLE_CLIENT_ID = '624469211510-2g9kd4udf2rh0iv4ge1lqsm083r186ck.apps.googleusercontent.com';
     const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/calendar';
     const TASK_SOON_DAYS = 7;
+    const costFormatter = new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
 
     const TASK_STATUS_CONFIG = {
       overdue: {
@@ -2288,6 +2529,18 @@
       return '';
     }
 
+    function normalizeEstimatedCost(value) {
+      const parsed = Number(String(value || '').replace(/,/g, '').trim());
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        return 0;
+      }
+      return Number(parsed.toFixed(2));
+    }
+
+    function formatEstimatedCost(value) {
+      return costFormatter.format(normalizeEstimatedCost(value));
+    }
+
     function getTaskDueDateString(task) {
       const dueInput = task?.querySelector('.task-due');
       const value = dueInput ? dueInput.value : (task?.dataset?.dueDate || '');
@@ -2378,6 +2631,34 @@
 
       const dueInput = meta.querySelector('.task-due');
       return dueInput;
+    }
+
+    function getTaskEstimatedCost(task) {
+      return normalizeEstimatedCost(task?.dataset?.estimatedCost);
+    }
+
+    function updateTaskCostBadge(task) {
+      const taskMeta = task.querySelector('.task-meta');
+      if (!taskMeta) return;
+
+      const cost = getTaskEstimatedCost(task);
+      const existing = taskMeta.querySelector('.task-cost');
+      if (cost <= 0) {
+        if (existing) {
+          existing.remove();
+        }
+        return;
+      }
+
+      if (existing) {
+        existing.textContent = `예상: ${formatEstimatedCost(cost)}`;
+        return;
+      }
+
+      const costBadge = document.createElement('span');
+      costBadge.className = 'task-cost';
+      costBadge.textContent = `예상: ${formatEstimatedCost(cost)}`;
+      taskMeta.appendChild(costBadge);
     }
 
     function getTaskLink(task) {
@@ -2918,6 +3199,8 @@
         dueDateInput.value = fallbackDueDate;
       }
 
+      task.dataset.estimatedCost = normalizeEstimatedCost(task.dataset.estimatedCost || task.dataset.estimatedcost || '');
+      updateTaskCostBadge(task);
       const rawUrl = normalizeTaskUrl(task.dataset.url || task.getAttribute('data-url'));
       task.dataset.url = rawUrl;
       updateTaskVisitLink(task);
@@ -2997,9 +3280,11 @@
         const section = normalizeTaskSection(task.dataset.section || getTaskSection(task));
         const dueDate = getTaskDueDateValue(task);
         const visitUrl = normalizeTaskUrl(task.dataset.visitUrl || task.dataset.url || task.getAttribute('data-url'));
+        const estimatedCost = getTaskEstimatedCost(task);
         task.dataset.taskId = id;
         task.dataset.section = section;
         task.dataset.visitUrl = visitUrl;
+        task.dataset.estimatedCost = estimatedCost;
 
         return {
           id,
@@ -3010,7 +3295,8 @@
           isCustom: task.dataset.customTask === 'true',
           section,
           dueDate,
-          visitUrl
+          visitUrl,
+          estimatedCost
         };
       });
 
@@ -3026,6 +3312,7 @@
           section: task.section,
           dueDate: task.dueDate,
           visitUrl: task.visitUrl,
+          estimatedCost: normalizeEstimatedCost(task.estimatedCost),
           done: task.done
         })))
       );
@@ -3039,17 +3326,20 @@
       id,
       section = 'before-move',
       dueDate = '',
-      visitUrl = ''
+      visitUrl = '',
+      estimatedCost = 0
     }) {
       const safePriority = priorityMeta[priority] ? priority : 'mid';
       const tagMeta = priorityMeta[safePriority];
       const safeDueDate = normalizeDateValue(dueDate);
       const safeVisitUrl = normalizeTaskUrl(visitUrl);
+      const safeEstimatedCost = normalizeEstimatedCost(estimatedCost);
       const taskEl = document.createElement('div');
       taskEl.className = 'task';
       taskEl.dataset.taskId = id || generateTaskId();
       taskEl.dataset.section = normalizeTaskSection(section);
       taskEl.dataset.dueDate = safeDueDate;
+      taskEl.dataset.estimatedCost = safeEstimatedCost;
       taskEl.dataset.visitUrl = safeVisitUrl;
 
       if (isCustom) {
@@ -3118,6 +3408,7 @@
       }
 
       updateTaskStatusBadge(taskEl);
+      updateTaskCostBadge(taskEl);
 
       return taskEl;
     }
@@ -3131,6 +3422,14 @@
       const total = taskInputs.length;
       const remaining = Math.max(total - done, 0);
       const percent = total ? Math.round((done / total) * 100) : 0;
+      const totalCost = tasks.reduce((sum, task) => sum + getTaskEstimatedCost(task), 0);
+      const doneCost = tasks.reduce((sum, task) => {
+        if (task.querySelector('[data-task]')?.checked) {
+          return sum + getTaskEstimatedCost(task);
+        }
+        return sum;
+      }, 0);
+      const remainCost = totalCost - doneCost;
 
       tasks.forEach(task => {
         const checkbox = task.querySelector('[data-task]');
@@ -3174,6 +3473,9 @@
       summaryFocus.textContent = shortNextTask;
       progressBar.style.width = `${percent}%`;
       progressRing.style.setProperty('--progress-angle', `${percent * 3.6}deg`);
+      taskTotalCost.textContent = formatEstimatedCost(totalCost);
+      taskDoneCost.textContent = formatEstimatedCost(doneCost);
+      taskRemainCost.textContent = formatEstimatedCost(remainCost);
       persistTaskState();
     }
 
@@ -3200,6 +3502,9 @@
       const section = normalizeTaskSection(state.section);
       const dueDate = normalizeDateValue(state.dueDate);
       const visitUrl = normalizeTaskUrl(state.visitUrl);
+      const estimatedCost = Object.prototype.hasOwnProperty.call(state, 'estimatedCost')
+        ? normalizeEstimatedCost(state.estimatedCost)
+        : normalizeEstimatedCost(task.dataset?.estimatedCost);
       const title = task.querySelector('.task-title');
       const desc = task.querySelector('.task-desc');
       const checkbox = task.querySelector('[data-task]');
@@ -3222,10 +3527,12 @@
       ensureEditableTask(task);
 
       task.dataset.section = section;
+      task.dataset.estimatedCost = estimatedCost;
       task.dataset.visitUrl = visitUrl;
       appendTaskToSection(task, section);
       updateTaskVisitLink(task);
       updateTaskStatusBadge(task);
+      updateTaskCostBadge(task);
 
       const dueInput = task.querySelector('.task-due');
       if (dueInput) {
@@ -3251,7 +3558,8 @@
           id: task.id,
           section: task.section,
           dueDate: task.dueDate,
-          visitUrl: task.visitUrl
+          visitUrl: task.visitUrl,
+          estimatedCost: task.estimatedCost
         });
         appendTaskToSection(customTask, task.section);
         allTasks.push(customTask);
@@ -3520,6 +3828,7 @@
       const section = normalizeTaskSection(customTaskSection.value);
       const dueDate = normalizeDateValue(customTaskDueDate.value);
       const visitUrl = customTaskUrl.value;
+      const estimatedCost = normalizeEstimatedCost(customTaskCost.value);
 
       if (!title) {
         alert('할 일 제목을 입력해 주세요.');
@@ -3534,7 +3843,8 @@
         isCustom: true,
         section,
         dueDate,
-        visitUrl
+        visitUrl,
+        estimatedCost
       });
       appendTaskToSection(customTask, section);
       sortTasksInSection(section);
@@ -3543,6 +3853,7 @@
       customTaskDesc.value = '';
       customTaskPriority.value = 'mid';
       customTaskDueDate.value = '';
+      customTaskCost.value = '';
       customTaskUrl.value = '';
 
       persistTaskState();
