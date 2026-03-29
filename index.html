@@ -713,6 +713,46 @@
       color: var(--muted);
     }
 
+    .task-status {
+      margin-left: auto;
+      align-self: center;
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1;
+      white-space: nowrap;
+      border: 1px solid rgba(75, 52, 27, 0.2);
+      background: rgba(255, 255, 255, 0.86);
+      color: var(--text);
+    }
+
+    .task-status.overdue {
+      border-color: rgba(194, 65, 45, 0.32);
+      background: rgba(194, 65, 45, 0.1);
+      color: var(--danger);
+    }
+
+    .task-status.due-today {
+      border-color: rgba(199, 130, 36, 0.34);
+      background: rgba(199, 130, 36, 0.11);
+      color: var(--warn);
+    }
+
+    .task-status.soon {
+      border-color: rgba(94, 123, 168, 0.26);
+      background: rgba(94, 123, 168, 0.09);
+      color: #3f5d88;
+    }
+
+    .task-status.buffer {
+      border-color: rgba(61, 122, 88, 0.24);
+      background: rgba(61, 122, 88, 0.08);
+      color: var(--ok);
+    }
+
     .task-due-label {
       font-weight: 800;
       color: var(--text);
@@ -2103,6 +2143,26 @@
     let googleTokenClient;
     const GOOGLE_CLIENT_ID = '624469211510-2g9kd4udf2rh0iv4ge1lqsm083r186ck.apps.googleusercontent.com';
     const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/calendar';
+    const TASK_SOON_DAYS = 7;
+
+    const TASK_STATUS_CONFIG = {
+      overdue: {
+        text: '기한 지남',
+        className: 'overdue'
+      },
+      dueToday: {
+        text: '오늘 마감',
+        className: 'due-today'
+      },
+      upcoming: {
+        text: '예정됨',
+        className: 'soon'
+      },
+      buffer: {
+        text: '여유 있음',
+        className: 'buffer'
+      }
+    };
 
     function generateTaskId() {
       return `task-${Math.random().toString(36).slice(2, 8)}-${Date.now().toString(36)}`;
@@ -2226,6 +2286,50 @@
         return value;
       }
       return '';
+    }
+
+    function getTaskDueDateString(task) {
+      const dueInput = task?.querySelector('.task-due');
+      const value = dueInput ? dueInput.value : (task?.dataset?.dueDate || '');
+      return normalizeDateValue(value);
+    }
+
+    function getTaskDueStatus(dueDate) {
+      if (!dueDate) {
+        return TASK_STATUS_CONFIG.buffer;
+      }
+
+      const [year, month, day] = dueDate.split('-').map(Number);
+      if (!year || !month || !day) {
+        return TASK_STATUS_CONFIG.buffer;
+      }
+
+      const target = new Date(year, month - 1, day);
+      const now = new Date();
+      const todayKey = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const dueKey = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+      const diffDays = Math.round((dueKey - todayKey) / 86400000);
+
+      if (diffDays < 0) return TASK_STATUS_CONFIG.overdue;
+      if (diffDays === 0) return TASK_STATUS_CONFIG.dueToday;
+      if (diffDays <= TASK_SOON_DAYS) return TASK_STATUS_CONFIG.upcoming;
+      return TASK_STATUS_CONFIG.buffer;
+    }
+
+    function updateTaskStatusBadge(task) {
+      const dueDate = getTaskDueDateString(task);
+      const status = getTaskDueStatus(dueDate);
+      const taskMeta = task.querySelector('.task-meta');
+      if (!taskMeta) return;
+
+      let badge = taskMeta.querySelector('.task-status');
+      if (!badge) {
+        badge = document.createElement('span');
+        taskMeta.appendChild(badge);
+      }
+
+      badge.className = `task-status ${status.className}`;
+      badge.textContent = status.text;
     }
 
     function normalizeTaskUrl(value) {
@@ -2817,6 +2921,7 @@
       const rawUrl = normalizeTaskUrl(task.dataset.url || task.getAttribute('data-url'));
       task.dataset.url = rawUrl;
       updateTaskVisitLink(task);
+      updateTaskStatusBadge(task);
     }
 
     function formatCountLabel(value) {
@@ -3012,6 +3117,8 @@
         updateTaskVisitLink(taskEl);
       }
 
+      updateTaskStatusBadge(taskEl);
+
       return taskEl;
     }
 
@@ -3028,6 +3135,7 @@
       tasks.forEach(task => {
         const checkbox = task.querySelector('[data-task]');
         task.classList.toggle('done', Boolean(checkbox?.checked));
+        updateTaskStatusBadge(task);
       });
 
       const pendingTasks = tasks
@@ -3117,6 +3225,7 @@
       task.dataset.visitUrl = visitUrl;
       appendTaskToSection(task, section);
       updateTaskVisitLink(task);
+      updateTaskStatusBadge(task);
 
       const dueInput = task.querySelector('.task-due');
       if (dueInput) {
@@ -3236,6 +3345,7 @@
         if (!task) return;
         const section = normalizeTaskSection(task.dataset.section);
         task.dataset.dueDate = normalizeDateValue(event.target.value);
+        updateTaskStatusBadge(task);
         appendTaskToSection(task, section);
         sortTasksInSection(section);
         persistTaskState();
