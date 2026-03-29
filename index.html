@@ -894,6 +894,51 @@
       white-space: nowrap;
     }
 
+    .task-cost-wrap {
+      margin-left: auto;
+      align-self: center;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      flex-wrap: nowrap;
+    }
+
+    .task-cost-label {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(75, 52, 27, 0.14);
+      background: rgba(255, 255, 255, 0.82);
+      color: var(--text);
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .task-cost-input {
+      width: 84px;
+      max-width: 96px;
+      min-height: 24px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      border: 1px solid rgba(75, 52, 27, 0.14);
+      background: rgba(255, 255, 255, 0.92);
+      color: var(--text);
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1;
+      text-align: right;
+      outline: none;
+    }
+
+    .task-cost-input:focus-visible {
+      border-color: rgba(198, 93, 46, 0.5);
+      box-shadow: 0 0 0 3px rgba(198, 93, 46, 0.12);
+    }
+
     .task[data-priority="high"] {
       border-left: 8px solid rgba(194, 65, 45, 0.62);
       box-shadow:
@@ -1619,6 +1664,13 @@
       box-shadow: 0 0 0 4px rgba(247, 166, 125, 0.12);
     }
 
+    body[data-theme="dark"] .task-cost-label,
+    body[data-theme="dark"] .task-cost-input {
+      border-color: rgba(255, 238, 220, 0.16);
+      background: rgba(53, 44, 37, 0.82);
+      color: #fff9f2;
+    }
+
     body[data-theme="dark"] .secondary {
       background: rgba(94, 123, 168, 0.2);
       color: #d4e3fb;
@@ -1727,7 +1779,7 @@
       .task-meta,
       .task-meta .task-due,
       .task-meta .task-status,
-      .task-meta .task-cost {
+      .task-meta .task-cost-input {
         width: 100%;
       }
 
@@ -1968,7 +2020,7 @@
               </div>
             </div>
             <div class="checklist" data-task-section="before-move">
-              <label class="task" data-section="before-move" data-due-date="" data-estimated-cost="250">
+              <label class="task" data-section="before-move" data-due-date="" data-estimated-cost="0">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">클로징 일정과 준비물 최종 확인</div>
@@ -1980,7 +2032,7 @@
                 </div>
                 <span class="tag high">급함</span>
               </label>
-              <label class="task" data-section="before-move" data-due-date="" data-estimated-cost="180">
+              <label class="task" data-section="before-move" data-due-date="" data-estimated-cost="0">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">주택 보험 연결 및 대출 쪽 전달</div>
@@ -1992,7 +2044,7 @@
                 </div>
                 <span class="tag high">급함</span>
               </label>
-              <label class="task" data-section="before-move" data-due-date="" data-estimated-cost="300">
+              <label class="task" data-section="before-move" data-due-date="" data-estimated-cost="0">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">현재 집 정리 / 판매 준비</div>
@@ -2004,7 +2056,7 @@
                 </div>
                 <span class="tag mid">중요</span>
               </label>
-              <label class="task" data-section="before-move" data-due-date="" data-estimated-cost="220">
+              <label class="task" data-section="before-move" data-due-date="" data-estimated-cost="0">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">이삿짐 분류: 가져갈 것 / 버릴 것 / 판매할 것</div>
@@ -2016,7 +2068,7 @@
                 </div>
                 <span class="tag mid">중요</span>
               </label>
-              <label class="task" data-section="before-move" data-due-date="" data-url="https://www.ntta.com/toll-tag" data-estimated-cost="120">
+              <label class="task" data-section="before-move" data-due-date="" data-url="https://www.ntta.com/toll-tag" data-estimated-cost="0">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">차량 이동 계획 확정</div>
@@ -2028,7 +2080,7 @@
                 </div>
                 <span class="tag mid">중요</span>
               </label>
-              <label class="task" data-section="before-move" data-due-date="" data-estimated-cost="260">
+              <label class="task" data-section="before-move" data-due-date="" data-estimated-cost="0">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">현재 집 청소/수리 마감 점검</div>
@@ -2040,7 +2092,7 @@
                 </div>
                 <span class="tag mid">중요</span>
               </label>
-              <label class="task" data-section="before-move" data-due-date="" data-estimated-cost="95">
+              <label class="task" data-section="before-move" data-due-date="" data-estimated-cost="0">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">중개인/세탁/정리 업체 마감 정산</div>
@@ -2052,7 +2104,7 @@
                 </div>
                 <span class="tag low">일반</span>
               </label>
-              <label class="task" data-section="before-move" data-due-date="" data-estimated-cost="140">
+              <label class="task" data-section="before-move" data-due-date="" data-estimated-cost="0">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">클로징 서류 보안 백업</div>
@@ -2064,7 +2116,7 @@
                 </div>
                 <span class="tag high">급함</span>
               </label>
-              <label class="task" data-section="before-move" data-due-date="" data-estimated-cost="320">
+              <label class="task" data-section="before-move" data-due-date="" data-estimated-cost="0">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">차량 운송 ETA 확인 및 반입일 고정</div>
@@ -2076,7 +2128,7 @@
                 </div>
                 <span class="tag mid">중요</span>
               </label>
-              <label class="task" data-section="before-move" data-due-date="" data-estimated-cost="110">
+              <label class="task" data-section="before-move" data-due-date="" data-estimated-cost="0">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">고양이 이동 이동장 상태 점검</div>
@@ -2105,7 +2157,7 @@
               </div>
             </div>
             <div class="checklist" data-task-section="moving-week">
-              <label class="task" data-section="moving-week" data-due-date="" data-estimated-cost="190">
+              <label class="task" data-section="moving-week" data-due-date="" data-estimated-cost="0">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">고양이 이동 세팅 준비</div>
@@ -2117,7 +2169,7 @@
                 </div>
                 <span class="tag mid">중요</span>
               </label>
-              <label class="task" data-section="moving-week" data-due-date="" data-url="https://www.powertochoose.org" data-estimated-cost="150">
+              <label class="task" data-section="moving-week" data-due-date="" data-url="https://www.powertochoose.org" data-estimated-cost="0">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">텍사스 유틸리티 예약</div>
@@ -2129,7 +2181,7 @@
                 </div>
                 <span class="tag high">급함</span>
               </label>
-              <label class="task" data-section="moving-week" data-due-date="" data-estimated-cost="75">
+              <label class="task" data-section="moving-week" data-due-date="" data-estimated-cost="0">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">현재 집 유틸리티 종료 신청</div>
@@ -2141,7 +2193,7 @@
                 </div>
                 <span class="tag mid">중요</span>
               </label>
-              <label class="task" data-section="moving-week" data-due-date="" data-estimated-cost="220">
+              <label class="task" data-section="moving-week" data-due-date="" data-estimated-cost="0">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">입주일 전 주택 전력 재점검</div>
@@ -2153,7 +2205,7 @@
                 </div>
                 <span class="tag low">일반</span>
               </label>
-              <label class="task" data-section="moving-week" data-due-date="" data-estimated-cost="80">
+              <label class="task" data-section="moving-week" data-due-date="" data-estimated-cost="0">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">고양이 건강기록 / 마이크로칩 확인</div>
@@ -2182,7 +2234,7 @@
               </div>
             </div>
             <div class="checklist" data-task-section="after-move">
-              <label class="task" data-section="after-move" data-due-date="" data-url="https://www.usps.com/manage/forward.htm" data-estimated-cost="60">
+              <label class="task" data-section="after-move" data-due-date="" data-url="https://www.usps.com/manage/forward.htm" data-estimated-cost="0">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">주소 변경 / 우편 포워딩</div>
@@ -2195,7 +2247,7 @@
                 <span class="tag low">일반</span>
               </label>
 
-              <label class="task" data-section="after-move" data-due-date="" data-url="https://public.txdmv.gov/" data-estimated-cost="420">
+              <label class="task" data-section="after-move" data-due-date="" data-url="https://public.txdmv.gov/" data-estimated-cost="0">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">텍사스 DMV / 번호판 / 면세 신청 계획 세우기</div>
@@ -2207,7 +2259,7 @@
                 </div>
                 <span class="tag mid">중요</span>
               </label>
-              <label class="task" data-section="after-move" data-due-date="" data-estimated-cost="180">
+              <label class="task" data-section="after-move" data-due-date="" data-estimated-cost="0">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">텍사스 차량 등록 및 과세 서류 제출</div>
@@ -2220,7 +2272,7 @@
                 <span class="tag high">급함</span>
               </label>
 
-              <label class="task" data-section="after-move" data-due-date="" data-estimated-cost="140">
+              <label class="task" data-section="after-move" data-due-date="" data-estimated-cost="0">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">입주 첫날 필수품 가방 따로 준비</div>
@@ -2232,7 +2284,7 @@
                 </div>
                 <span class="tag low">일반</span>
               </label>
-              <label class="task" data-section="after-move" data-due-date="" data-url="https://www.tdpr.state.tx.us/" data-estimated-cost="150">
+              <label class="task" data-section="after-move" data-due-date="" data-url="https://www.tdpr.state.tx.us/" data-estimated-cost="0">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">텍사스 거주/세무 변경 신청 정리</div>
@@ -2244,7 +2296,7 @@
                 </div>
                 <span class="tag mid">중요</span>
               </label>
-              <label class="task" data-section="after-move" data-due-date="" data-estimated-cost="120">
+              <label class="task" data-section="after-move" data-due-date="" data-estimated-cost="0">
                 <input type="checkbox" data-task />
                 <div>
                   <div class="task-title">고양이 적응 루틴 즉시 실행</div>
@@ -3017,7 +3069,7 @@
       if (!taskMeta) return;
 
       const cost = getTaskEstimatedCost(task);
-      const existing = taskMeta.querySelector('.task-cost');
+      const existing = taskMeta.querySelector('.task-cost-wrap');
       if (cost <= 0) {
         if (existing) {
           existing.remove();
@@ -3025,15 +3077,38 @@
         return;
       }
 
-      if (existing) {
-        existing.textContent = `예상: ${formatEstimatedCost(cost)}`;
-        return;
+      if (!existing) {
+        const wrapper = document.createElement('span');
+        wrapper.className = 'task-cost-wrap';
+        const label = document.createElement('span');
+        const input = document.createElement('input');
+
+        label.className = 'task-cost-label';
+        label.textContent = '예상';
+
+        input.className = 'task-cost-input';
+        input.type = 'number';
+        input.inputMode = 'decimal';
+        input.min = '0';
+        input.step = '0.01';
+        input.setAttribute('aria-label', '예상 비용 입력');
+        input.setAttribute('title', '예상 비용 수정');
+
+        wrapper.appendChild(label);
+        wrapper.appendChild(input);
+        taskMeta.appendChild(wrapper);
       }
 
-      const costBadge = document.createElement('span');
-      costBadge.className = 'task-cost';
-      costBadge.textContent = `예상: ${formatEstimatedCost(cost)}`;
-      taskMeta.appendChild(costBadge);
+      const wrapper = existing || taskMeta.querySelector('.task-cost-wrap');
+      const input = wrapper.querySelector('.task-cost-input');
+      if (!input) return;
+      const normalized = normalizeEstimatedCost(cost);
+      input.value = normalized > 0 ? normalized.toString() : '';
+
+      const label = wrapper.querySelector('.task-cost-label');
+      if (label) {
+        label.textContent = `예상`;
+      }
     }
 
     function getTaskLink(task) {
@@ -4116,6 +4191,17 @@
     });
 
     taskList.addEventListener('input', event => {
+      if (event.target.matches('.task-cost-input')) {
+        const task = event.target.closest('.task');
+        if (!task) return;
+        const raw = event.target.value;
+        const normalized = raw.trim() === '' ? 0 : normalizeEstimatedCost(raw);
+        task.dataset.estimatedCost = normalized;
+        persistTaskState();
+        updateProgress();
+        return;
+      }
+
       if (!event.target.matches('.task-title[contenteditable="true"], .task-desc[contenteditable="true"]')) {
         return;
       }
@@ -4131,14 +4217,28 @@
     });
 
     taskList.addEventListener('blur', event => {
-      const editable = event.target.matches('.task-title[contenteditable="true"], .task-desc[contenteditable="true"]');
+      const editable = event.target.matches(
+        '.task-title[contenteditable="true"], .task-desc[contenteditable="true"], .task-cost-input'
+      );
       if (!editable) return;
+
+      if (event.target.matches('.task-cost-input')) {
+        const raw = event.target.value;
+        const task = event.target.closest('.task');
+        if (task) {
+          const normalized = raw.trim() === '' ? 0 : normalizeEstimatedCost(raw);
+          task.dataset.estimatedCost = normalized;
+          event.target.value = normalized ? normalized.toString() : '';
+          updateTaskCostBadge(task);
+        }
+      }
+
       persistTaskState();
       updateProgress();
     }, true);
 
     taskList.addEventListener('keydown', event => {
-      if (!event.target.matches('.task-title[contenteditable="true"], .task-desc[contenteditable="true"]')) {
+      if (!event.target.matches('.task-title[contenteditable="true"], .task-desc[contenteditable="true"], .task-cost-input')) {
         return;
       }
       if (event.key === 'Enter') {
@@ -4175,7 +4275,7 @@
       }
 
       if (
-        event.target.closest('[data-task], .task-priority, .task-due, .task-remove, .task-title[contenteditable="true"], .task-desc[contenteditable="true"], .task-link')
+        event.target.closest('[data-task], .task-priority, .task-due, .task-cost-input, .task-link')
       ) {
         if (event.target.closest('.task-title[contenteditable="true"], .task-desc[contenteditable="true"]')) {
           event.preventDefault();
