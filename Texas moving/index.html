@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Move Prep Dashboard</title>
+  <script>
+    (() => {
+      const path = window.location.pathname || '/';
+      const base = path.includes('/movingtocelina/') ? '/movingtocelina/' : '/';
+      const target = `${window.location.origin}${base}`;
+
+      if (`${window.location.origin}${path}` !== target && `${window.location.origin}${path.replace(/\/index\.html$/, '/')}` !== target) {
+        window.location.replace(target);
+      }
+    })();
+  </script>
+</head>
+<body>
+  <p>이사 준비 플래너로 이동합니다.</p>
+</body>
+</html>

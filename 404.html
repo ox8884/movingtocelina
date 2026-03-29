@@ -7,42 +7,12 @@
     <script>
       (function() {
         const path = window.location.pathname;
+        const hasRepoPrefix = path.indexOf('/movingtocelina/') === 0 || path === '/movingtocelina';
+        const fallback = hasRepoPrefix ? '/movingtocelina/' : '/';
 
-        const candidates = [
-          "/movingtocelina",
-          "/movingtocelina/",
-          "/Texas%20moving",
-          "/Texas%20moving/",
-          "/Texas moving",
-          "/Texas moving/"
-        ];
-
-        const fallback = (() => {
-          for (const candidate of candidates) {
-            if (path === candidate || path === `${candidate}/` || path.startsWith(`${candidate}/`) || path.startsWith(`${candidate}/index.html`)) {
-              return candidate.endsWith("/") ? candidate : `${candidate}/`;
-            }
-          }
-          return "/";
-        })();
-
-        if (path === fallback || path === `${fallback}index.html`) {
-          window.location.replace(fallback);
-          return;
+        if (path !== fallback && path !== `${fallback}index.html`) {
+          window.location.replace(`${window.location.origin}${fallback}`);
         }
-
-        if (candidates.some((candidate) =>
-          path.startsWith(`${candidate}/`) ||
-          path === candidate ||
-          candidate === "/movingtocelina" && path.startsWith("/movingtocelina")
-        )) {
-          window.location.replace(fallback);
-          return;
-        }
-
-        // For any other invalid path (including custom-domain root paths),
-        // send users to site root.
-        window.location.replace(`${fallback}#`);
       })();
     </script>
   </head>
