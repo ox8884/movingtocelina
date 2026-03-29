@@ -2677,6 +2677,27 @@
     const GOOGLE_CLIENT_ID = '624469211510-2g9kd4udf2rh0iv4ge1lqsm083r186ck.apps.googleusercontent.com';
     const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/calendar';
     const TASK_SOON_DAYS = 7;
+    const TASK_STORAGE_KEYS = [
+      'txMoveTaskState',
+      'txMoveTasks',
+      'txMoveCustomTasks',
+      'txMoveBudget',
+      'txMoveMoveDate',
+      'txMoveNotes',
+      'txMoveTheme',
+      'txMoveGoogleConnected',
+      'txMoveSelectedScheduleDate',
+      'txMoveCalendarCollapsed',
+      'txMoveScheduleEvents'
+    ];
+    const TASK_STORAGE_REVISION_KEY = 'txMoveStorageRevision';
+    const TASK_SYNC_CHANNEL = 'txMovePlannerRealtimeSync';
+    const taskSyncId = `tab-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
+    const taskSyncChannel = typeof BroadcastChannel === 'function'
+      ? new BroadcastChannel(TASK_SYNC_CHANNEL)
+      : null;
+    let lastSeenStorageRevision = '';
+    let storagePollTimer = null;
     const costFormatter = new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
@@ -2805,6 +2826,7 @@
       calendarToggle.textContent = isCollapsed ? '캘린더 펼치기' : '캘린더 접기';
       if (save) {
         localStorage.setItem(CALENDAR_COLLAPSE_KEY, isCollapsed ? '1' : '0');
+        notifyStorageSync('calendar-collapse');
       }
     }
 
@@ -2919,6 +2941,33 @@
     }
 
     let pendingStorageRefresh = null;
+    function notifyStorageSync(source = 'local') {
+      const revision = `${Date.now()}-${taskSyncId}-${source}`;
+      localStorage.setItem(TASK_STORAGE_REVISION_KEY, revision);
+      lastSeenStorageRevision = revision;
+
+      if (taskSyncChannel) {
+        taskSyncChannel.postMessage({
+          type: 'state-sync',
+          source: taskSyncId,
+          revision,
+          keys: TASK_STORAGE_KEYS
+        });
+      }
+    }
+
+    function pollForStorageSync() {
+      const currentRevision = localStorage.getItem(TASK_STORAGE_REVISION_KEY) || '';
+      if (currentRevision !== lastSeenStorageRevision && currentRevision !== '') {
+        lastSeenStorageRevision = currentRevision;
+        scheduleStorageRefresh();
+      }
+    }
+
+    function startStoragePoll() {
+      if (storagePollTimer) return;
+      storagePollTimer = window.setInterval(pollForStorageSync, 2500);
+    }
 
     function isEditingTaskInline() {
       const active = document.activeElement;
@@ -3356,6 +3405,7 @@
 
       calendarEvents = normalized;
       localStorage.setItem('txMoveScheduleEvents', JSON.stringify(calendarEvents));
+      notifyStorageSync('calendar-events');
     }
 
     function setGoogleCalendarEvents(nextState) {
@@ -3368,12 +3418,14 @@
       if (connected) {
         setGoogleCalendarStatus('구글 캘린더가 연결되어 있습니다. 월간 동기화 가능.');
         localStorage.setItem('txMoveGoogleConnected', '1');
+        notifyStorageSync('google-connect');
       } else {
         setGoogleCalendarStatus('구글 캘린더 미연결');
         googleAccessToken = '';
         googleTokenExpiresAt = 0;
         googleCalendarEvents = {};
         localStorage.removeItem('txMoveGoogleConnected');
+        notifyStorageSync('google-disconnect');
         renderScheduleCalendar();
         renderScheduleEvents();
       }
@@ -3824,6 +3876,7 @@
 
       if (save) {
         localStorage.setItem('txMoveTheme', nextTheme);
+        notifyStorageSync('theme');
       }
     }
 
@@ -3877,6 +3930,7 @@
 
       if (save) {
         localStorage.setItem('txMoveMoveDate', dateString || '');
+        notifyStorageSync('move-date');
       }
       logTaskDebugState('move-date-update');
     }
@@ -3930,6 +3984,7 @@
           done: task.done
         })))
       );
+      notifyStorageSync('persist');
       logTaskDebugState('persist');
     }
 
@@ -4132,6 +4187,7 @@
         budgetState[id] = document.getElementById(id).value;
       });
       localStorage.setItem('txMoveBudget', JSON.stringify(budgetState));
+      notifyStorageSync('budget');
     }
 
     function applyTaskStateToTask(task, state) {
@@ -4296,6 +4352,7 @@
       const savedScheduleDate = localStorage.getItem('txMoveSelectedScheduleDate');
       const savedGoogleConnected = localStorage.getItem('txMoveGoogleConnected') === '1';
       const savedCalendarCollapsed = localStorage.getItem(CALENDAR_COLLAPSE_KEY) === '1';
+      lastSeenStorageRevision = localStorage.getItem(TASK_STORAGE_REVISION_KEY) || lastSeenStorageRevision;
 
       if (savedScheduleDate && /^\d{4}-\d{2}-\d{2}$/.test(savedScheduleDate)) {
         selectedScheduleDate = savedScheduleDate;
@@ -4530,6 +4587,7 @@
 
       selectedScheduleDate = dayBtn.dataset.scheduleDate;
       localStorage.setItem('txMoveSelectedScheduleDate', selectedScheduleDate);
+      notifyStorageSync('selected-schedule-date');
       renderScheduleCalendar();
       renderScheduleEvents();
       scheduleInput.focus();
@@ -4636,6 +4694,7 @@
 
     notes.addEventListener('input', () => {
       localStorage.setItem('txMoveNotes', notes.value);
+      notifyStorageSync('notes');
     });
 
     exportBtn.addEventListener('click', async () => {
@@ -4661,6 +4720,7 @@
     window.addEventListener('pagehide', () => {
       persistTaskState();
       localStorage.setItem('txMoveNotes', notes.value);
+      notifyStorageSync('pagehide-notes');
     });
 
     window.addEventListener('visibilitychange', () => {
@@ -4669,31 +4729,37 @@
       } else {
         persistTaskState();
         localStorage.setItem('txMoveNotes', notes.value);
+        notifyStorageSync('notes');
       }
+    });
+
+    window.addEventListener('focus', () => {
+      scheduleStorageRefresh();
     });
 
     window.addEventListener('storage', event => {
       if (!event.key) return;
 
-      if (![
-        'txMoveTaskState',
-        'txMoveTasks',
-        'txMoveCustomTasks',
-        'txMoveBudget',
-        'txMoveMoveDate',
-        'txMoveNotes',
-        'txMoveTheme',
-        'txMoveGoogleConnected',
-        'txMoveSelectedScheduleDate',
-        'txMoveCalendarCollapsed',
-        'txMoveScheduleEvents'
-      ].includes(event.key)) {
+      if (![...TASK_STORAGE_KEYS, TASK_STORAGE_REVISION_KEY].includes(event.key)) {
         return;
       }
 
       scheduleStorageRefresh();
     });
 
+    if (taskSyncChannel) {
+      taskSyncChannel.addEventListener('message', event => {
+        const data = event?.data || {};
+        if (data.source === taskSyncId) return;
+        if (data.type !== 'state-sync') return;
+        if (data.revision) {
+          lastSeenStorageRevision = data.revision;
+        }
+        scheduleStorageRefresh();
+      });
+    }
+
+    startStoragePoll();
     loadState();
   </script>
 </body>
