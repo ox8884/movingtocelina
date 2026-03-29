@@ -3100,6 +3100,10 @@
     async function persistPlannerDataToServer(_source = 'local-change') {
       try {
         const body = buildPlannerPayload();
+        console.log('[Planner Sync] POST /data body ready', {
+          hasPlanner: !!body?.planner,
+          hasStorage: !!body?.storage
+        });
         const summary = buildPlannerPayloadSummary(body);
         console.log(`[Planner Sync] POST /data`, {
           method: 'POST',

@@ -107,16 +107,26 @@ function isPlannerShape(data) {
   );
 }
 
+function normalizeIncomingPayload(incoming) {
+  const planner = normalizePlannerPayload(incoming);
+  return {
+    updatedAt: Date.now(),
+    planner
+  };
+}
+
+let loggedCanonicalPayloadOnce = false;
+
 async function readData() {
   try {
     const raw = await fs.promises.readFile(DATA_FILE, 'utf8');
     const parsed = JSON.parse(raw || '{}');
-    const normalized = normalizePlannerPayload(parsed);
+    const normalizedPlanner = normalizePlannerPayload(parsed);
     const shouldMigrate = !isPlannerShape(parsed) || !!parsed.storage;
 
     const payload = {
       updatedAt: Number(parsed.updatedAt || Date.now()),
-      planner: normalized
+      planner: normalizedPlanner
     };
 
     if (shouldMigrate) {
@@ -133,11 +143,11 @@ async function readData() {
 }
 
 async function writeData(nextData) {
-  const planner = normalizePlannerPayload(nextData);
-  const payload = {
-    updatedAt: Date.now(),
-    planner
-  };
+  const payload = normalizeIncomingPayload(nextData);
+  if (!loggedCanonicalPayloadOnce) {
+    console.log('[Planner API] Saved /data payload:', JSON.stringify(payload, null, 2));
+    loggedCanonicalPayloadOnce = true;
+  }
   await fs.promises.writeFile(DATA_FILE, JSON.stringify(payload, null, 2), 'utf8');
   return payload;
 }
