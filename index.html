@@ -561,7 +561,7 @@
 
     .task {
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto auto;
+      grid-template-columns: auto minmax(0, 1fr) auto auto auto;
       align-items: start;
       gap: 12px;
       padding: 16px;
@@ -675,6 +675,21 @@
       font-size: 12px;
       font-weight: 800;
       cursor: pointer;
+    }
+
+    .task-priority {
+      align-self: center;
+      min-height: 34px;
+      padding: 0 10px;
+      border: 1px solid rgba(75, 52, 27, 0.16);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      appearance: none;
+      outline: none;
     }
 
     .add-task-panel,
@@ -957,6 +972,12 @@
       background: rgba(39, 33, 28, 0.72);
       border-color: rgba(255, 238, 220, 0.08);
       box-shadow: 0 14px 28px rgba(0, 0, 0, 0.14);
+    }
+
+    body[data-theme="dark"] .task-priority {
+      background: rgba(43, 36, 31, 0.9);
+      color: var(--text);
+      border-color: rgba(255, 238, 220, 0.16);
     }
 
     body[data-theme="dark"] .progress-strip,
@@ -1538,13 +1559,23 @@
 
     function setTaskPriority(task, priority) {
       const tag = task.querySelector('.tag');
+      const prioritySelect = task.querySelector('.task-priority');
       const tagMeta = priorityMeta[priority] ? priorityMeta[priority] : priorityMeta.mid;
       if (!tag) return;
       tag.className = `tag ${tagMeta.className}`;
       tag.textContent = tagMeta.text;
+
+      if (prioritySelect && prioritySelect.options?.length) {
+        prioritySelect.value = priority;
+      }
     }
 
     function getTaskPriority(task) {
+      const prioritySelect = task.querySelector('.task-priority');
+      if (prioritySelect && priorityMeta[prioritySelect.value]) {
+        return prioritySelect.value;
+      }
+
       const tag = task.querySelector('.tag');
       if (!tag) return 'mid';
       const match = [...tag.classList].find(className => priorityMeta[className]);
@@ -1580,6 +1611,21 @@
         desc.setAttribute('contenteditable', 'true');
         desc.setAttribute('data-placeholder', '설명 입력');
         desc.setAttribute('aria-label', '체크리스트 항목 설명');
+      }
+
+      const tag = task.querySelector('.tag');
+      const currentPriority = getTaskPriority(task);
+      if (tag && !task.querySelector('.task-priority')) {
+        const prioritySelect = document.createElement('select');
+        prioritySelect.className = 'task-priority';
+        prioritySelect.setAttribute('aria-label', '우선순위 변경');
+        prioritySelect.innerHTML = `
+          <option value="high">급함</option>
+          <option value="mid">중요</option>
+          <option value="low">일반</option>
+        `;
+        prioritySelect.value = currentPriority;
+        task.appendChild(prioritySelect);
       }
     }
 
@@ -1652,13 +1698,14 @@
         const checkbox = task.querySelector('[data-task]');
         const title = task.querySelector('.task-title');
         const desc = task.querySelector('.task-desc');
+        const prioritySelect = task.querySelector('.task-priority');
         task.dataset.taskId = id;
 
         return {
           id,
           title: normalizeTaskText(title?.textContent || ''),
           desc: normalizeTaskText(desc?.textContent || ''),
-          priority: getTaskPriority(task),
+          priority: prioritySelect && prioritySelect.value ? prioritySelect.value : getTaskPriority(task),
           done: Boolean(checkbox?.checked),
           isCustom: task.dataset.customTask === 'true'
         };
@@ -1715,7 +1762,17 @@
       tag.className = `tag ${tagMeta.className}`;
       tag.textContent = tagMeta.text;
 
-      label.append(checkbox, textWrap, tag);
+      const prioritySelect = document.createElement('select');
+      prioritySelect.className = 'task-priority';
+      prioritySelect.setAttribute('aria-label', '우선순위 변경');
+      prioritySelect.innerHTML = `
+        <option value="high">급함</option>
+        <option value="mid">중요</option>
+        <option value="low">일반</option>
+      `;
+      prioritySelect.value = safePriority;
+
+      label.append(checkbox, textWrap, tag, prioritySelect);
 
       if (isCustom) {
         const removeBtn = document.createElement('button');
@@ -1880,10 +1937,21 @@
       }
       const task = event.target.closest('.task');
       if (!task) return;
+      const sanitized = normalizeTaskText(event.target.textContent || '');
+      if (sanitized !== event.target.textContent) {
+        event.target.textContent = sanitized;
+      }
 
       persistTaskState();
       updateProgress();
     });
+
+    taskList.addEventListener('blur', event => {
+      const editable = event.target.matches('.task-title[contenteditable="true"], .task-desc[contenteditable="true"]');
+      if (!editable) return;
+      persistTaskState();
+      updateProgress();
+    }, true);
 
     taskList.addEventListener('keydown', event => {
       if (!event.target.matches('.task-title[contenteditable="true"], .task-desc[contenteditable="true"]')) {
@@ -1892,6 +1960,26 @@
       if (event.key === 'Enter') {
         event.preventDefault();
         event.target.blur();
+      }
+    });
+
+    taskList.addEventListener('paste', event => {
+      const editable = event.target.matches('.task-title[contenteditable="true"], .task-desc[contenteditable="true"]');
+      if (!editable) return;
+
+      event.preventDefault();
+      const text = (event.clipboardData?.getData('text/plain') || '');
+      const sanitized = text.replace(/\r?\n/g, ' ');
+      document.execCommand('insertText', false, sanitized);
+    });
+
+    taskList.addEventListener('change', event => {
+      if (event.target.matches('.task-priority')) {
+        const task = event.target.closest('.task');
+        if (!task) return;
+        setTaskPriority(task, event.target.value);
+        persistTaskState();
+        updateProgress();
       }
     });
 
