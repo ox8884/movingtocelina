@@ -954,7 +954,8 @@
       transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
     }
 
-    .task-cost-add:hover {
+    .task-cost-add:hover,
+    .task-cost-confirm:hover {
       transform: translateY(-1px);
       border-color: rgba(198, 93, 46, 0.5);
       background: linear-gradient(135deg, rgba(214, 107, 56, 0.98), rgba(247, 167, 127, 0.98));
@@ -964,7 +965,27 @@
       display: none;
     }
 
+    .task-cost-wrap.empty .task-cost-confirm {
+      display: none;
+    }
+
     .task-cost-wrap:not(.empty) .task-cost-add {
+      display: none;
+    }
+
+    .task-cost-confirm {
+      min-height: 24px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(198, 93, 46, 0.35);
+      background: linear-gradient(135deg, rgba(198, 93, 46, 0.95), rgba(230, 150, 107, 0.95));
+      color: #fffaf4;
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
       display: none;
     }
 
@@ -2876,6 +2897,27 @@
       return fallback || '';
     }
 
+    function logTaskDebugState(label = 'state') {
+      const moveDate = getMoveDateKey();
+      const tasks = getAllTaskCards().map(task => {
+        const titleText = task.querySelector('.task-title')?.textContent?.trim() || '';
+        return {
+          id: task.dataset.taskId || '',
+          title: titleText,
+          section: getTaskSection(task),
+          done: Boolean(task.querySelector('[data-task]')?.checked),
+          dueDate: getTaskDueDateValue(task),
+          dueOffset: getStoredDueOffset(task),
+          estimatedCost: getTaskEstimatedCost(task)
+        };
+      });
+
+      console.group(`Move Planner Debug (${label})`);
+      console.log('Move Date:', moveDate);
+      console.log('Tasks:', tasks);
+      console.groupEnd();
+    }
+
     function getSectionContainer(section) {
       const normalized = normalizeTaskSection(section);
       return sectionProgressMap[normalized]?.container || beforeMoveList;
@@ -3106,6 +3148,7 @@
       const cost = getTaskEstimatedCost(task);
       const existing = taskMeta.querySelector('.task-cost-wrap');
       const hasCost = cost > 0;
+      const isEditing = existing?.classList.contains('editing');
 
       if (!existing) {
         const wrapper = document.createElement('span');
@@ -3113,6 +3156,7 @@
         const label = document.createElement('span');
         const input = document.createElement('input');
         const addButton = document.createElement('button');
+        const confirmButton = document.createElement('button');
 
         label.className = 'task-cost-label';
         label.textContent = '예상';
@@ -3136,22 +3180,37 @@
           event.stopPropagation();
         });
 
+        confirmButton.className = 'task-cost-confirm';
+        confirmButton.type = 'button';
+        confirmButton.textContent = '확인';
+        confirmButton.setAttribute('aria-label', '예상 비용 확인');
+        confirmButton.addEventListener('pointerdown', event => {
+          event.stopPropagation();
+        });
+
         wrapper.appendChild(label);
         wrapper.appendChild(input);
         wrapper.appendChild(addButton);
+        wrapper.appendChild(confirmButton);
         taskMeta.appendChild(wrapper);
       }
 
       const wrapper = existing || taskMeta.querySelector('.task-cost-wrap');
       const input = wrapper.querySelector('.task-cost-input');
       const addButton = wrapper.querySelector('.task-cost-add');
+      const confirmButton = wrapper.querySelector('.task-cost-confirm');
       if (!input) return;
       const normalized = normalizeEstimatedCost(cost);
       input.value = normalized > 0 ? normalized.toString() : '';
-      if (addButton) {
+      wrapper.classList.toggle('empty', !hasCost && !isEditing);
+      wrapper.classList.toggle('editing', isEditing);
+      if (isEditing) {
+        addButton.style.display = 'none';
+        confirmButton.style.display = 'inline-flex';
+      } else {
         addButton.style.display = hasCost ? 'none' : 'inline-flex';
+        confirmButton.style.display = 'none';
       }
-      wrapper.classList.toggle('empty', !hasCost);
 
       const label = wrapper.querySelector('.task-cost-label');
       if (label) {
@@ -3783,6 +3842,7 @@
       if (save) {
         localStorage.setItem('txMoveMoveDate', dateString || '');
       }
+      logTaskDebugState('move-date-update');
     }
 
     function persistTaskState() {
@@ -3834,6 +3894,7 @@
           done: task.done
         })))
       );
+      logTaskDebugState('persist');
     }
 
     function createTaskElement({
@@ -3941,8 +4002,10 @@
       return taskEl;
     }
 
-    function updateProgress() {
-      sortAllTaskSections();
+    function updateProgress({ suppressSort = false } = {}) {
+      if (!suppressSort) {
+        sortAllTaskSections();
+      }
 
       const tasks = getAllTaskCards();
       const taskInputs = tasks
@@ -4196,6 +4259,7 @@
       updateMoveDate(savedMoveDate, false);
       updateProgress();
       updateBudget();
+      logTaskDebugState('loadState');
     }
 
     taskList.addEventListener('change', event => {
@@ -4246,7 +4310,7 @@
         const normalized = raw.trim() === '' ? 0 : normalizeEstimatedCost(raw);
         task.dataset.estimatedCost = normalized;
         persistTaskState();
-        updateProgress();
+        updateProgress({ suppressSort: true });
         return;
       }
 
@@ -4261,7 +4325,7 @@
       }
 
       persistTaskState();
-      updateProgress();
+      updateProgress({ suppressSort: true });
     });
 
     taskList.addEventListener('blur', event => {
@@ -4274,6 +4338,10 @@
         const raw = event.target.value;
         const task = event.target.closest('.task');
         if (task) {
+          const wrapper = task.querySelector('.task-cost-wrap');
+          if (wrapper) {
+            wrapper.classList.remove('editing');
+          }
           const normalized = raw.trim() === '' ? 0 : normalizeEstimatedCost(raw);
           task.dataset.estimatedCost = normalized;
           event.target.value = normalized ? normalized.toString() : '';
@@ -4282,7 +4350,7 @@
       }
 
       persistTaskState();
-      updateProgress();
+      updateProgress({ suppressSort: true });
     }, true);
 
     taskList.addEventListener('keydown', event => {
@@ -4327,12 +4395,29 @@
         const wrapper = clickedTask.querySelector('.task-cost-wrap');
         const costInput = wrapper?.querySelector('.task-cost-input');
         if (wrapper && costInput) {
+          wrapper.classList.add('editing');
           wrapper.classList.remove('empty');
-          costInput.style.display = '';
-          addCostButton.style.display = 'none';
           costInput.value = '';
           costInput.focus();
           costInput.select();
+          updateTaskCostBadge(clickedTask);
+        }
+        return;
+      }
+
+      const confirmCostButton = event.target.closest('.task-cost-confirm');
+      if (confirmCostButton) {
+        const wrapper = clickedTask.querySelector('.task-cost-wrap');
+        const costInput = wrapper?.querySelector('.task-cost-input');
+        if (wrapper && costInput) {
+          const raw = costInput.value;
+          const normalized = raw.trim() === '' ? 0 : normalizeEstimatedCost(raw);
+          clickedTask.dataset.estimatedCost = normalized;
+          costInput.value = normalized ? normalized.toString() : '';
+          wrapper.classList.remove('editing');
+          updateTaskCostBadge(clickedTask);
+          persistTaskState();
+          updateProgress({ suppressSort: true });
         }
         return;
       }
