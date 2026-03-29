@@ -521,6 +521,45 @@
       align-content: start;
     }
 
+    .server-sync-card {
+      margin-top: 12px;
+      padding: 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(0, 0, 0, 0.12);
+      display: grid;
+      gap: 8px;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .server-sync-card span {
+      color: rgba(255, 241, 228, 0.78);
+      font-size: 11px;
+      letter-spacing: -0.01em;
+      font-weight: 600;
+    }
+
+    .server-sync-card strong {
+      color: #fff8f2;
+      font-size: 12px;
+      font-weight: 700;
+      word-break: break-all;
+    }
+
+    .server-sync-grid {
+      display: grid;
+      gap: 8px;
+    }
+
+    .server-sync-grid .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      min-width: 0;
+    }
+
     .summary-topline {
       display: flex;
       align-items: center;
@@ -1988,6 +2027,34 @@
             <small>이사 날짜 기준 카운트</small>
           </div>
         </div>
+        <div class="server-sync-card">
+          <div class="summary-topline">
+            <span>서버 동기화 상태</span>
+            <span class="summary-badge" id="serverSyncStatus">대기 중</span>
+          </div>
+          <div class="server-sync-grid">
+            <div class="row">
+              <span>마지막 동기화</span>
+              <strong id="serverSyncLastSyncAt">-</strong>
+            </div>
+            <div class="row">
+              <span>Move Date</span>
+              <strong id="serverSyncMoveDate">미설정</strong>
+            </div>
+            <div class="row">
+              <span>전체 task / 완료</span>
+              <strong id="serverSyncTaskCount">0 / 0</strong>
+            </div>
+            <div class="row">
+              <span>Custom Task</span>
+              <strong id="serverSyncCustomCount">0</strong>
+            </div>
+            <div class="row">
+              <span>Notes</span>
+              <strong id="serverSyncNotes">없음</strong>
+            </div>
+          </div>
+        </div>
       </aside>
     </section>
 
@@ -2639,6 +2706,12 @@
     const movingWeekProgress = document.getElementById('movingWeekProgress');
     const afterMoveProgressText = document.getElementById('afterMoveProgressText');
     const afterMoveProgress = document.getElementById('afterMoveProgress');
+    const serverSyncStatus = document.getElementById('serverSyncStatus');
+    const serverSyncLastSyncAt = document.getElementById('serverSyncLastSyncAt');
+    const serverSyncMoveDate = document.getElementById('serverSyncMoveDate');
+    const serverSyncTaskCount = document.getElementById('serverSyncTaskCount');
+    const serverSyncCustomCount = document.getElementById('serverSyncCustomCount');
+    const serverSyncNotes = document.getElementById('serverSyncNotes');
     const beforeMoveList = document.querySelector('[data-task-section="before-move"]');
     const movingWeekList = document.querySelector('[data-task-section="moving-week"]');
     const afterMoveList = document.querySelector('[data-task-section="after-move"]');
@@ -2970,6 +3043,44 @@
       };
     }
 
+    function updateServerSyncCard(plannerData = {}, updatedAt = '', syncState = '대기 중') {
+      const planner = plannerData && typeof plannerData === 'object' ? plannerData : {};
+      const tasks = Array.isArray(planner.tasks) ? planner.tasks : [];
+      const doneTasks = tasks.filter(task => task?.done).length;
+      const customTasks = Array.isArray(planner.customTasks) ? planner.customTasks : [];
+      const notesText = typeof planner.notes === 'string' ? planner.notes : String(planner.notes || '');
+      const updatedAtTime = Number(updatedAt);
+      const updatedAtText = Number.isFinite(updatedAtTime) && updatedAtTime > 0
+        ? new Date(updatedAtTime).toLocaleString('ko-KR')
+        : '-';
+
+      if (serverSyncStatus) {
+        serverSyncStatus.textContent = syncState;
+      }
+
+      if (serverSyncLastSyncAt) {
+        serverSyncLastSyncAt.textContent = updatedAtText;
+      }
+
+      if (serverSyncMoveDate) {
+        serverSyncMoveDate.textContent = planner.moveDate || '미설정';
+      }
+
+      if (serverSyncTaskCount) {
+        serverSyncTaskCount.textContent = `${tasks.length} / ${doneTasks}`;
+      }
+
+      if (serverSyncCustomCount) {
+        serverSyncCustomCount.textContent = String(customTasks.length);
+      }
+
+      if (serverSyncNotes) {
+        const noteSummary = notesText.trim().length > 0 ? `있음 (${notesText.length}자)` : '없음';
+        serverSyncNotes.textContent = noteSummary;
+      }
+
+    }
+
     function parseJsonValue(value, fallback) {
       try {
         const parsed = JSON.parse(value || 'null');
@@ -3123,18 +3234,23 @@
             responseText
           });
           setPlannerSyncStatus(`서버 저장 실패: HTTP ${res.status}`, true);
+          updateServerSyncCard({}, '', '마지막 저장 실패');
           return;
         }
 
         const result = await res.json().catch(() => ({}));
         if (result?.updatedAt) {
           lastServerRevision = String(result.updatedAt);
+          const planner = result?.planner && typeof result.planner === 'object' ? result.planner : buildPlannerPayload().planner;
+          const updatedAt = String(result.updatedAt);
+          updateServerSyncCard(planner, updatedAt, '마지막 저장 성공');
         }
         setPlannerSyncStatus('');
         plannerSyncReason = '';
       } catch (error) {
         console.error('[Planner Sync] POST /data exception', error);
         setPlannerSyncStatus(`서버 저장 실패: ${error.message || '네트워크 오류'}`, true);
+        updateServerSyncCard({}, '', '마지막 저장 실패');
       }
     }
 
@@ -3151,10 +3267,18 @@
           status: res.status
         });
         const remoteRevision = String(result?.updatedAt || '');
+        const planner = result?.planner || getPlannerFromLegacyStorage(result?.storage);
+        if (result?.planner || (result?.storage && typeof result.storage === 'object')) {
+          const syncState = '마지막 불러오기 성공';
+          const notes = planner?.notes || '';
+          updateServerSyncCard({
+            ...planner,
+            notes: typeof notes === 'string' ? notes : String(notes || '')
+          }, remoteRevision, syncState);
+        }
         if (!force && remoteRevision && remoteRevision === lastServerRevision) return;
 
         const legacyStorage = result?.storage;
-        const planner = result?.planner || getPlannerFromLegacyStorage(legacyStorage);
         const hasPlannerPayload = planner && typeof planner === 'object' &&
           (Array.isArray(planner.tasks) && planner.tasks.length > 0 ||
            Array.isArray(planner.customTasks) && planner.customTasks.length > 0 ||
@@ -3183,6 +3307,7 @@
         isApplyingRemoteState = false;
         console.error(error);
         setPlannerSyncStatus(`데이터 불러오기 실패: ${error.message || '네트워크 오류'}`, true);
+        updateServerSyncCard({}, '', '마지막 불러오기 실패');
       }
     }
 
