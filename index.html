@@ -1618,6 +1618,37 @@
       gap: 8px;
     }
 
+    .schedule-task-panel {
+      margin-top: 10px;
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border-radius: 16px;
+      border: 1px solid rgba(75, 52, 27, 0.1);
+      background: rgba(255, 247, 236, 0.72);
+    }
+
+    .schedule-task-tools {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .schedule-task-tools select {
+      min-height: 40px;
+      border-radius: 12px;
+      border: 1px solid rgba(75, 52, 27, 0.16);
+      background: rgba(255, 255, 255, 0.92);
+      padding: 0 12px;
+      color: var(--ink);
+      font: inherit;
+    }
+
+    .schedule-task-list {
+      margin-top: 0;
+    }
+
     .schedule-date-header {
       display: flex;
       align-items: center;
@@ -1665,6 +1696,55 @@
     .schedule-item.google {
       background: rgba(94, 123, 168, 0.08);
       border-color: rgba(94, 123, 168, 0.18);
+    }
+
+    .schedule-item.task-entry {
+      background: rgba(255, 255, 255, 0.94);
+      border-color: rgba(214, 157, 67, 0.2);
+    }
+
+    .schedule-item.task-entry.done {
+      opacity: 0.72;
+    }
+
+    .schedule-item.task-entry p {
+      font-weight: 700;
+    }
+
+    .schedule-item-meta {
+      margin-top: 6px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .schedule-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 24px;
+      padding: 0 10px;
+      border-radius: 999px;
+      background: rgba(75, 52, 27, 0.08);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+    }
+
+    .schedule-chip.priority-high {
+      background: rgba(194, 65, 45, 0.12);
+      color: #b04028;
+    }
+
+    .schedule-chip.priority-mid {
+      background: rgba(214, 157, 67, 0.14);
+      color: #9b6412;
+    }
+
+    .schedule-chip.priority-low {
+      background: rgba(94, 123, 168, 0.12);
+      color: #3f5d88;
     }
 
     .schedule-item .google-label {
@@ -2193,11 +2273,13 @@
       .hero-action-row,
       .btn-row,
       .add-task-actions,
-      .schedule-add {
+      .schedule-add,
+      .schedule-task-tools {
         justify-content: stretch;
       }
 
-      .schedule-add .primary {
+      .schedule-add .primary,
+      .schedule-task-tools .secondary {
         width: 100%;
       }
 
@@ -2270,6 +2352,17 @@
               <div class="schedule-date-header">
                 <h4 id="selectedDateLabel">선택한 날짜</h4>
                 <div class="helper" id="selectedDateEventsMeta">날짜를 눌러 할 일을 입력해 주세요.</div>
+              </div>
+
+              <div class="schedule-task-panel">
+                <div class="schedule-task-tools">
+                  <select id="scheduleTaskAssignSelect" aria-label="기존 할 일을 선택한 날짜에 배정">
+                    <option value="">선택한 날짜에 배정할 기존 할 일 선택</option>
+                  </select>
+                  <button id="assignTaskToDateBtn" class="secondary" type="button">기존 할 일 배정</button>
+                </div>
+                <div class="helper" id="selectedDateTaskMeta">선택한 날짜의 할 일이 여기에 표시됩니다.</div>
+                <div id="selectedDateTaskList" class="schedule-list schedule-task-list"></div>
               </div>
 
               <div class="schedule-add">
@@ -3056,6 +3149,10 @@
     const scheduleGrid = document.getElementById('scheduleGrid');
     const selectedDateLabel = document.getElementById('selectedDateLabel');
     const selectedDateEventsMeta = document.getElementById('selectedDateEventsMeta');
+    const scheduleTaskAssignSelect = document.getElementById('scheduleTaskAssignSelect');
+    const assignTaskToDateBtn = document.getElementById('assignTaskToDateBtn');
+    const selectedDateTaskMeta = document.getElementById('selectedDateTaskMeta');
+    const selectedDateTaskList = document.getElementById('selectedDateTaskList');
     const googleCalendarStatus = document.getElementById('googleCalendarStatus');
     const googleConnectBtn = document.getElementById('googleConnectBtn');
     const googleSyncBtn = document.getElementById('googleSyncBtn');
@@ -3578,6 +3675,151 @@
       const google = Array.isArray(googleCalendarEvents[dateKey]) ? googleCalendarEvents[dateKey] : [];
       const filteredGoogle = google.filter(item => !localGoogleIds.has(item.googleEventId));
       return [...local, ...filteredGoogle];
+    }
+
+    function getPlannerTasksForDate(dateKey) {
+      const safeDateKey = normalizeDateValue(dateKey || '');
+      if (!safeDateKey) return [];
+      const tasks = Array.isArray(plannerState?.tasks) ? plannerState.tasks : [];
+      return tasks
+        .filter(task => normalizeDateValue(task?.dueDate || '') === safeDateKey)
+        .slice()
+        .sort((a, b) => {
+          if (Boolean(a?.done) !== Boolean(b?.done)) {
+            return a?.done ? 1 : -1;
+          }
+          const prioA = priorityMeta[a?.priority || 'mid']?.rank ?? 1;
+          const prioB = priorityMeta[b?.priority || 'mid']?.rank ?? 1;
+          if (prioA !== prioB) {
+            return prioA - prioB;
+          }
+          return String(a?.title || '').localeCompare(String(b?.title || ''));
+        });
+    }
+
+    function getCalendarEntriesForDate(dateKey) {
+      return {
+        tasks: getPlannerTasksForDate(dateKey),
+        events: getCombinedEventsForDate(dateKey)
+      };
+    }
+
+    function buildScheduleTaskOptionLabel(task) {
+      const title = normalizeTaskText(task?.title || '') || '이름 없는 작업';
+      const priorityText = priorityMeta[task?.priority || 'mid']?.text || '중요';
+      const dueDate = normalizeDateValue(task?.dueDate || '');
+      const dueLabel = dueDate ? formatDateLabel(dueDate) : '날짜 미정';
+      return `${title} · ${priorityText} · ${dueLabel}`;
+    }
+
+    function renderSelectedDateTaskOptions(selectedDateTasks = []) {
+      if (!scheduleTaskAssignSelect || !assignTaskToDateBtn) return;
+      const currentValue = scheduleTaskAssignSelect.value || '';
+      const selectedTaskIds = new Set(selectedDateTasks.map(task => String(task?.id || '')).filter(Boolean));
+      const assignableTasks = (Array.isArray(plannerState?.tasks) ? plannerState.tasks : [])
+        .filter(task => task?.id && !selectedTaskIds.has(String(task.id)))
+        .slice()
+        .sort((a, b) => {
+          if (Boolean(a?.done) !== Boolean(b?.done)) {
+            return a?.done ? 1 : -1;
+          }
+          return String(a?.title || '').localeCompare(String(b?.title || ''));
+        });
+
+      scheduleTaskAssignSelect.innerHTML = '';
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = selectedScheduleDate
+        ? '선택한 날짜에 배정할 기존 할 일 선택'
+        : '먼저 날짜를 선택해 주세요';
+      scheduleTaskAssignSelect.appendChild(placeholder);
+
+      assignableTasks.forEach((task) => {
+        const option = document.createElement('option');
+        option.value = String(task.id || '');
+        option.textContent = buildScheduleTaskOptionLabel(task);
+        scheduleTaskAssignSelect.appendChild(option);
+      });
+
+      if (currentValue && assignableTasks.some(task => String(task.id || '') === currentValue)) {
+        scheduleTaskAssignSelect.value = currentValue;
+      } else {
+        scheduleTaskAssignSelect.value = '';
+      }
+
+      const disabled = !selectedScheduleDate || assignableTasks.length === 0;
+      scheduleTaskAssignSelect.disabled = disabled;
+      assignTaskToDateBtn.disabled = disabled;
+    }
+
+    function createSelectedDateTaskRow(task) {
+      const row = document.createElement('div');
+      row.className = `schedule-item task-entry${task?.done ? ' done' : ''}`;
+
+      const titleWrap = document.createElement('div');
+      const title = document.createElement('p');
+      title.textContent = task?.title || '이름 없는 작업';
+      titleWrap.appendChild(title);
+
+      const meta = document.createElement('div');
+      meta.className = 'schedule-item-meta';
+
+      const priorityChip = document.createElement('span');
+      priorityChip.className = `schedule-chip priority-${task?.priority || 'mid'}`;
+      priorityChip.textContent = priorityMeta[task?.priority || 'mid']?.text || '중요';
+      meta.appendChild(priorityChip);
+
+      const dueDiff = getTaskDueDiff(normalizeDateValue(task?.dueDate || ''));
+      const dueChip = document.createElement('span');
+      dueChip.className = 'schedule-chip';
+      dueChip.textContent = formatDueDDay(dueDiff);
+      meta.appendChild(dueChip);
+
+      if (task?.done) {
+        const doneChip = document.createElement('span');
+        doneChip.className = 'schedule-chip';
+        doneChip.textContent = '완료';
+        meta.appendChild(doneChip);
+      }
+
+      titleWrap.appendChild(meta);
+
+      const action = document.createElement('button');
+      action.type = 'button';
+      action.className = 'secondary';
+      action.textContent = '체크리스트';
+      action.setAttribute('data-focus-task-id', String(task?.id || ''));
+
+      row.append(titleWrap, action);
+      return row;
+    }
+
+    function focusTaskCard(taskId) {
+      if (!taskId) return;
+      const target = taskList.querySelector(`.task[data-task-id="${CSS.escape(taskId)}"]`);
+      if (!target) return;
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target.classList.add('pulse');
+      window.setTimeout(() => {
+        target.classList.remove('pulse');
+      }, 1200);
+    }
+
+    function assignTaskToDate(taskId, dateKey = selectedScheduleDate) {
+      const safeTaskId = String(taskId || '');
+      const safeDateKey = normalizeDateValue(dateKey || '');
+      if (!safeTaskId || !safeDateKey) return null;
+      const moveDateKey = getMoveDateKey();
+      const dueOffset = moveDateKey && safeDateKey
+        ? getDueOffsetFromAbsoluteDate(moveDateKey, safeDateKey)
+        : null;
+      return updateTaskStateInPlanner(safeTaskId, {
+        dueDate: safeDateKey,
+        dueOffset
+      }, {
+        reason: 'user-task-edit',
+        shouldSync: true
+      });
     }
 
     function getLocalEventIndex(dateKey, eventId) {
@@ -5637,8 +5879,9 @@
         button.className = 'calendar-day';
         button.textContent = String(day);
         button.setAttribute('data-schedule-date', dateKey);
-        const events = getCombinedEventsForDate(dateKey);
-        button.setAttribute('aria-label', `${dateKey} 일정 ${events.length}개`);
+        const entries = getCalendarEntriesForDate(dateKey);
+        const entryCount = entries.tasks.length + entries.events.length;
+        button.setAttribute('aria-label', `${dateKey} 할 일 ${entries.tasks.length}개, 일정 ${entries.events.length}개`);
 
         if (dateKey === todayKey) {
           button.classList.add('today');
@@ -5648,7 +5891,7 @@
           button.classList.add('selected');
         }
 
-        if (events.length > 0) {
+        if (entryCount > 0) {
           button.classList.add('has-events');
         }
 
@@ -5659,19 +5902,49 @@
     function renderScheduleEvents() {
       const dateLabel = formatDateLabel(selectedScheduleDate) || '날짜를 선택해 주세요.';
       selectedDateLabel.textContent = dateLabel;
-      const events = getCombinedEventsForDate(selectedScheduleDate);
-      const metaCount = `${events.length}개 등록`;
+      const entries = getCalendarEntriesForDate(selectedScheduleDate);
+      const tasks = entries.tasks;
+      const events = entries.events;
 
-      selectedDateEventsMeta.textContent = selectedScheduleDate
-        ? `${metaCount} / ${selectedDateLabel.textContent}`
-        : '날짜를 선택해 주세요.';
+      if (selectedDateEventsMeta) {
+        selectedDateEventsMeta.textContent = selectedScheduleDate
+          ? `할 일 ${tasks.length}개 · 일정 ${events.length}개`
+          : '날짜를 선택해 주세요.';
+      }
+
+      if (selectedDateTaskMeta) {
+        selectedDateTaskMeta.textContent = selectedScheduleDate
+          ? `선택한 날짜에 배정된 할 일 ${tasks.length}개`
+          : '선택한 날짜의 할 일이 여기에 표시됩니다.';
+      }
+
+      if (selectedDateTaskList) {
+        selectedDateTaskList.innerHTML = '';
+        if (!selectedScheduleDate) {
+          const empty = document.createElement('div');
+          empty.className = 'helper';
+          empty.textContent = '먼저 달력에서 날짜를 선택해 주세요.';
+          selectedDateTaskList.appendChild(empty);
+        } else if (!tasks.length) {
+          const empty = document.createElement('div');
+          empty.className = 'helper';
+          empty.textContent = '이 날짜에 배정된 할 일이 없습니다.';
+          selectedDateTaskList.appendChild(empty);
+        } else {
+          tasks.forEach((task) => {
+            selectedDateTaskList.appendChild(createSelectedDateTaskRow(task));
+          });
+        }
+      }
+
+      renderSelectedDateTaskOptions(tasks);
 
       scheduleList.innerHTML = '';
 
       if (!events.length) {
         const empty = document.createElement('div');
         empty.className = 'helper';
-        empty.textContent = '등록된 일정이 없습니다. 상단 입력창에서 추가해 주세요.';
+        empty.textContent = '등록된 일정이 없습니다. 아래 입력창에서 추가해 주세요.';
         scheduleList.appendChild(empty);
         return;
       }
@@ -6779,6 +7052,38 @@
       if (!dateKey || !eventId) return;
       await removeScheduleEvent(dateKey, eventId, source);
     });
+
+    if (assignTaskToDateBtn) {
+      assignTaskToDateBtn.addEventListener('click', () => {
+        const taskId = scheduleTaskAssignSelect?.value || '';
+        if (!selectedScheduleDate) {
+          alert('먼저 날짜를 선택해 주세요.');
+          return;
+        }
+        if (!taskId) {
+          alert('배정할 기존 할 일을 선택해 주세요.');
+          scheduleTaskAssignSelect?.focus();
+          return;
+        }
+        assignTaskToDate(taskId, selectedScheduleDate);
+      });
+    }
+
+    if (scheduleTaskAssignSelect) {
+      scheduleTaskAssignSelect.addEventListener('keydown', event => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        assignTaskToDateBtn?.click();
+      });
+    }
+
+    if (selectedDateTaskList) {
+      selectedDateTaskList.addEventListener('click', event => {
+        const focusButton = event.target.closest('[data-focus-task-id]');
+        if (!focusButton) return;
+        focusTaskCard(focusButton.getAttribute('data-focus-task-id') || '');
+      });
+    }
 
     googleConnectBtn.addEventListener('click', connectGoogleCalendar);
     googleSyncBtn.addEventListener('click', syncGoogleCalendar);
