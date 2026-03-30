@@ -554,6 +554,84 @@
       letter-spacing: -0.02em;
     }
 
+    .today-focus-card {
+      margin-top: 14px;
+      padding: 16px 18px;
+      border-radius: 18px;
+      border: 1px solid rgba(214, 102, 52, 0.16);
+      background:
+        radial-gradient(circle at top right, rgba(255, 205, 170, 0.2), transparent 36%),
+        rgba(255, 248, 242, 0.86);
+      display: grid;
+      gap: 10px;
+    }
+
+    .today-focus-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .today-focus-head span {
+      font-size: 12px;
+      color: rgba(95, 57, 38, 0.72);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 800;
+    }
+
+    .today-focus-head strong {
+      font-size: 1rem;
+      color: var(--ink);
+      letter-spacing: -0.03em;
+    }
+
+    .today-focus-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .today-focus-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(175, 104, 73, 0.12);
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    .today-focus-item strong {
+      font-size: 13px;
+      color: var(--ink);
+    }
+
+    .today-focus-item span {
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .today-focus-item.overdue span {
+      color: var(--danger);
+    }
+
+    .today-focus-item.due-today span {
+      color: #b76b00;
+    }
+
+    .today-focus-empty {
+      margin: 0;
+      font-size: 12px;
+      color: rgba(95, 57, 38, 0.72);
+    }
+
     .summary-grid,
     .content-grid,
     .budget-grid {
@@ -1056,6 +1134,17 @@
     .task-date-summary.buffer {
       background: rgba(61, 122, 88, 0.2);
       border-color: rgba(61, 122, 88, 0.46);
+    }
+
+    .task.due-warning {
+      border-color: rgba(199, 130, 36, 0.36);
+      background: linear-gradient(135deg, rgba(255, 245, 214, 0.92), rgba(255, 255, 255, 0.9));
+    }
+
+    .task.due-urgent {
+      border-color: rgba(194, 65, 45, 0.34);
+      background: linear-gradient(135deg, rgba(255, 234, 230, 0.96), rgba(255, 255, 255, 0.9));
+      box-shadow: 0 12px 24px rgba(194, 65, 45, 0.1);
     }
 
     .task-status {
@@ -2235,9 +2324,9 @@
             <small>가장 먼저 끝낼 항목</small>
           </div>
           <div class="hero-meta-card">
-            <span>이번 주 마감</span>
+            <span>이번 주 해야 할 일</span>
             <strong id="kpiThisWeekDue">0개</strong>
-            <small>7일 내 마감 예정</small>
+            <small>이번 주 안에 처리할 미완료 작업</small>
           </div>
           <div class="hero-meta-card">
             <span>남은 비용</span>
@@ -2384,6 +2473,15 @@
           <div class="progress-wrap">
             <div class="progress-bar" id="progressBar"></div>
           </div>
+        </div>
+
+        <div class="today-focus-card">
+          <div class="today-focus-head">
+            <span>오늘 해야 할 일</span>
+            <strong id="todayTaskCount">0개</strong>
+          </div>
+          <ul class="today-focus-list" id="todayTaskList"></ul>
+          <p class="today-focus-empty" id="todayTaskEmpty">오늘 바로 처리해야 할 작업이 없습니다.</p>
         </div>
 
         <div class="task-filter-bar">
@@ -2986,6 +3084,9 @@
     const movingWeekProgress = document.getElementById('movingWeekProgress');
     const afterMoveProgressText = document.getElementById('afterMoveProgressText');
     const afterMoveProgress = document.getElementById('afterMoveProgress');
+    const todayTaskCount = document.getElementById('todayTaskCount');
+    const todayTaskList = document.getElementById('todayTaskList');
+    const todayTaskEmpty = document.getElementById('todayTaskEmpty');
     const taskFilterButtons = [...document.querySelectorAll('[data-task-filter]')];
     const taskSortSelect = document.getElementById('taskSortSelect');
     const serverSyncStatus = document.getElementById('serverSyncStatus');
@@ -5119,7 +5220,7 @@
     function formatDueDDay(diffDays) {
       if (diffDays === null) return '날짜 미정';
       if (diffDays < 0) return `D+${Math.abs(diffDays)}`;
-      if (diffDays === 0) return 'D-day';
+      if (diffDays === 0) return '오늘';
       return `D-${diffDays}`;
     }
 
@@ -5138,6 +5239,7 @@
 
       let dueSummary = titleWrap.querySelector('.task-date-summary');
       if (!dueDate) {
+        task.classList.remove('due-urgent', 'due-warning');
         if (dueSummary) {
           dueSummary.remove();
         }
@@ -5152,6 +5254,12 @@
 
       dueSummary.classList.remove('overdue', 'due-today', 'upcoming', 'buffer');
       dueSummary.classList.add(status.className);
+      task.classList.remove('due-urgent', 'due-warning');
+      if (status.className === 'overdue') {
+        task.classList.add('due-urgent');
+      } else if (status.className === 'due-today') {
+        task.classList.add('due-warning');
+      }
       dueSummary.innerHTML = `
         <span class="task-date-main">${dateLabel || '날짜 미정'}</span>
         <span class="task-due-dday">${dDayLabel}</span>
@@ -5968,7 +6076,7 @@
       const dayDiff = Math.round((targetDate - startOfToday) / 86400000);
 
       if (dayDiff > 0) return `D-${dayDiff}`;
-      if (dayDiff === 0) return 'D-Day';
+      if (dayDiff === 0) return '오늘';
       return `D+${Math.abs(dayDiff)}`;
     }
 
@@ -6160,6 +6268,19 @@
       const pendingUrgentCount = pendingTasks.filter(task => (task?.priority || 'mid') === 'high').length;
       const nextTaskTitle = pendingTasks[0]?.title?.trim() || '모든 핵심 항목 완료';
       const shortNextTask = nextTaskTitle.length > 10 ? `${nextTaskTitle.slice(0, 10)}...` : nextTaskTitle;
+      const todayPriorityTasks = sourceTasks
+        .filter((task) => {
+          if (!task || task.done) return false;
+          const dueDate = normalizeDateValue(task.dueDate || '');
+          const diffDays = getTaskDueDiff(dueDate);
+          return diffDays !== null && diffDays <= 0;
+        })
+        .sort((a, b) => {
+          const aDiff = getTaskDueDiff(normalizeDateValue(a?.dueDate || ''));
+          const bDiff = getTaskDueDiff(normalizeDateValue(b?.dueDate || ''));
+          if ((aDiff ?? 9999) !== (bDiff ?? 9999)) return (aDiff ?? 9999) - (bDiff ?? 9999);
+          return String(a?.id || '').localeCompare(String(b?.id || ''));
+        });
 
       taskSectionKeys.forEach(sectionKey => {
         const tasksInSection = sourceTasks.filter(task => normalizeTaskSection(task?.section) === normalizeTaskSection(sectionKey));
@@ -6196,6 +6317,27 @@
       taskTotalCost.textContent = formatEstimatedCost(totalCost);
       taskDoneCost.textContent = formatEstimatedCost(doneCost);
       taskRemainCost.textContent = formatEstimatedCost(remainCost);
+      if (todayTaskCount) {
+        todayTaskCount.textContent = formatCountLabel(todayPriorityTasks.length);
+      }
+      if (todayTaskList) {
+        todayTaskList.innerHTML = '';
+        todayPriorityTasks.slice(0, 4).forEach((task) => {
+          const item = document.createElement('li');
+          const diffDays = getTaskDueDiff(normalizeDateValue(task?.dueDate || ''));
+          const itemStateClass = diffDays !== null && diffDays < 0 ? 'overdue' : 'due-today';
+          item.className = `today-focus-item ${itemStateClass}`;
+          const title = document.createElement('strong');
+          title.textContent = task?.title || '이름 없는 작업';
+          const meta = document.createElement('span');
+          meta.textContent = formatDueDDay(diffDays);
+          item.append(title, meta);
+          todayTaskList.appendChild(item);
+        });
+      }
+      if (todayTaskEmpty) {
+        todayTaskEmpty.hidden = todayPriorityTasks.length > 0;
+      }
       const after = getStateSnapshotFromDOM('progress-after');
       setLastStateMutationSource('updateProgress', 'state-render');
       logStateMutation('updateProgress', 'render', 'ui-render', { before, after });
