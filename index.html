@@ -580,6 +580,52 @@
       line-height: 1.5;
     }
 
+    .install-status-text.ready {
+      color: #fff6ef;
+      font-weight: 700;
+    }
+
+    .install-cta {
+      position: relative;
+      background: linear-gradient(135deg, #ffcfb4, #f7a67d);
+      color: #4f220d;
+      box-shadow: 0 12px 26px rgba(247, 166, 125, 0.24);
+      border: 1px solid rgba(255, 235, 220, 0.26);
+      animation: installPulse 1.8s ease-in-out infinite;
+    }
+
+    .install-cta:hover:not(:disabled) {
+      box-shadow: 0 16px 32px rgba(247, 166, 125, 0.3);
+    }
+
+    .install-cta::after {
+      content: "추천";
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 20px;
+      padding: 0 8px;
+      margin-left: 8px;
+      border-radius: 999px;
+      background: rgba(79, 34, 13, 0.12);
+      color: #4f220d;
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    @keyframes installPulse {
+      0%, 100% {
+        transform: translateY(0);
+        box-shadow: 0 12px 26px rgba(247, 166, 125, 0.24);
+      }
+      50% {
+        transform: translateY(-1px);
+        box-shadow: 0 18px 36px rgba(247, 166, 125, 0.34);
+      }
+    }
+
     .today-focus-card {
       margin-top: 14px;
       padding: 16px 18px;
@@ -2436,7 +2482,7 @@
             <strong id="plannerSyncRelativeTime">아직 없음</strong>
           </div>
           <div class="sync-status-actions" id="installAppActions" hidden>
-            <button type="button" class="server-sync-button" id="installAppBtn">앱 설치</button>
+            <button type="button" class="server-sync-button install-cta" id="installAppBtn">앱 설치</button>
           </div>
           <small class="install-status-text" id="installAppStatus">Android에서 홈 화면에 추가하면 앱처럼 열 수 있습니다.</small>
         </div>
@@ -4536,6 +4582,7 @@
         installAppBtn.textContent = buttonLabel;
       }
 
+      installAppStatus.classList.toggle('ready', Boolean(showButton) && !buttonDisabled);
       installAppStatus.textContent = message || 'Android에서 홈 화면에 추가하면 앱처럼 열 수 있습니다.';
     }
 
