@@ -1109,6 +1109,17 @@
       text-decoration: line-through;
       text-decoration-thickness: 2px;
       text-decoration-color: rgba(109, 101, 91, 0.42);
+      text-decoration-line: line-through;
+      text-decoration-style: solid;
+      color: rgba(74, 65, 56, 0.78);
+    }
+
+    .task.done .task-title[contenteditable="true"] {
+      text-decoration-line: line-through !important;
+      text-decoration-color: rgba(109, 101, 91, 0.6) !important;
+      text-decoration-thickness: 2px !important;
+      color: rgba(74, 65, 56, 0.8);
+      opacity: 0.95;
     }
 
     .task-remove {
@@ -1784,6 +1795,12 @@
 
     body[data-theme="dark"] .task.done .task-title {
       text-decoration-color: rgba(255, 241, 228, 0.34);
+      color: rgba(255, 241, 228, 0.82);
+    }
+
+    body[data-theme="dark"] .task.done .task-title[contenteditable="true"] {
+      text-decoration-color: rgba(255, 241, 228, 0.58) !important;
+      color: rgba(255, 241, 228, 0.82);
     }
 
     body[data-theme="dark"] .task-link {
@@ -2038,6 +2055,14 @@
               <strong id="serverSyncLastSyncAt">-</strong>
             </div>
             <div class="row">
+              <span>마지막 저장 시간</span>
+              <strong id="lastServerSaveAt">-</strong>
+            </div>
+            <div class="row">
+              <span>마지막 서버 불러오기</span>
+              <strong id="lastServerLoadAt">-</strong>
+            </div>
+            <div class="row">
               <span>Move Date</span>
               <strong id="serverSyncMoveDate">미설정</strong>
             </div>
@@ -2048,6 +2073,14 @@
             <div class="row">
               <span>Custom Task</span>
               <strong id="serverSyncCustomCount">0</strong>
+            </div>
+            <div class="row">
+              <span>Planner Task / Checked</span>
+              <strong id="plannerTaskSummary">0 / 0</strong>
+            </div>
+            <div class="row">
+              <span>마지막 렌더 task / DOM</span>
+              <strong id="lastRenderTaskSummary">0 / 0</strong>
             </div>
             <div class="row">
               <span>Notes</span>
@@ -2724,9 +2757,13 @@
     const afterMoveProgress = document.getElementById('afterMoveProgress');
     const serverSyncStatus = document.getElementById('serverSyncStatus');
     const serverSyncLastSyncAt = document.getElementById('serverSyncLastSyncAt');
+    const lastServerSaveAtEl = document.getElementById('lastServerSaveAt');
+    const lastServerLoadAtEl = document.getElementById('lastServerLoadAt');
     const serverSyncMoveDate = document.getElementById('serverSyncMoveDate');
     const serverSyncTaskCount = document.getElementById('serverSyncTaskCount');
     const serverSyncCustomCount = document.getElementById('serverSyncCustomCount');
+    const plannerTaskSummaryEl = document.getElementById('plannerTaskSummary');
+    const lastRenderTaskSummaryEl = document.getElementById('lastRenderTaskSummary');
     const serverSyncNotes = document.getElementById('serverSyncNotes');
     const lastStateMutationSourceEl = document.getElementById('lastStateMutationSource');
     const lastAllowedPostSourceEl = document.getElementById('lastAllowedPostSource');
@@ -2768,7 +2805,7 @@
       'user-task-edit',
       'user-custom-task-add',
       'user-custom-task-delete',
-      'user-manual-sync-save'
+      'user-manual-save'
     ]);
     const SYNC_BLOCKED_REASONS = new Set([
       'initializePlannerState',
@@ -2783,15 +2820,6 @@
       'polling',
       'localStorage-hook'
     ]);
-    const STORAGE_KEY_REASON_MAP = {
-      txMoveTaskState: 'user-task-edit',
-      txMoveTasks: 'user-task-edit',
-      txMoveCustomTasks: 'user-task-edit',
-      txMoveBudget: 'user-budget',
-      txMoveNotes: 'user-note',
-      txMoveMoveDate: 'user-move-date',
-      txMoveTaskStateRevision: 'user-task-edit'
-    };
     let scheduleCursorDate = new Date(today.getFullYear(), today.getMonth(), 1);
     let selectedScheduleDate = toDateKey(today);
     let calendarEvents = {};
@@ -2804,18 +2832,10 @@
     const GOOGLE_CLIENT_ID = '624469211510-2g9kd4udf2rh0iv4ge1lqsm083r186ck.apps.googleusercontent.com';
     const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/calendar';
     const TASK_SOON_DAYS = 7;
+    const PLANNER_STATE_STORAGE_KEY = 'txMovePlannerState';
     const TASK_STORAGE_KEYS = [
-      'txMoveTaskState',
-      'txMoveTasks',
-      'txMoveCustomTasks',
-      'txMoveBudget',
-      'txMoveMoveDate',
-      'txMoveNotes',
-      'txMoveTheme',
-      'txMoveGoogleConnected',
-      'txMoveSelectedScheduleDate',
-      'txMoveCalendarCollapsed',
-      'txMoveScheduleEvents'
+      PLANNER_STATE_STORAGE_KEY,
+      'txMoveLocalUpdatedAt'
     ];
     const PLANNER_API_BASE = 'https://movingtocelina.duckdns.org';
     const PLANNER_API_URL = `${PLANNER_API_BASE.replace(/\/$/, '')}/data`;
@@ -2839,6 +2859,8 @@
     let lastAllowedPostSource = 'none';
     let lastAllowedPostReason = 'none';
     let lastAllowedPostPayloadSummary = {};
+    let lastStorageSaveSource = 'none';
+    let lastHydrateSource = 'none';
     let hasRemotePlannerApplied = false;
     let pendingStateMutationReason = 'none';
     let hasTemplateBootstrapRun = false;
@@ -2847,6 +2869,24 @@
     let plannerPollTimer = null;
     let isApplyingRemoteState = false;
     let storagePollTimer = null;
+    let plannerState = {
+      moveDate: '',
+      tasks: [],
+      budget: {},
+      notes: '',
+      customTasks: [],
+      theme: 'light',
+      updatedAt: 0,
+      schedule: {
+        selectedDate: '',
+        calendarCollapsed: false,
+        events: {}
+      }
+    };
+    let lastServerSaveAt = 0;
+    let lastServerLoadAt = 0;
+    let lastRenderedPlannerTaskCount = 0;
+    let lastRenderedDomTaskCount = 0;
     const costFormatter = new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
@@ -2896,6 +2936,214 @@
     }
 
     let templateTaskSignatures = [];
+
+    function createEmptyPlannerState() {
+      return {
+        moveDate: '',
+        tasks: [],
+        budget: {},
+        notes: '',
+        customTasks: [],
+        theme: 'light',
+        updatedAt: 0,
+        schedule: {
+          selectedDate: '',
+          calendarCollapsed: false,
+          events: {}
+        }
+      };
+    }
+
+    function normalizePlannerTask(task = {}, includeDone = true) {
+      return {
+        id: task.id || task.taskId || generateTaskId(),
+        title: normalizeTaskText(task.title || ''),
+        desc: normalizeTaskText(task.desc || ''),
+        priority: priorityMeta[task.priority] ? task.priority : 'mid',
+        isCustom: Boolean(task.isCustom),
+        section: normalizeTaskSection(task.section || task.category || 'before-move'),
+        dueOffset: normalizeDueOffset(task.dueOffset),
+        dueDate: normalizeDateValue(task.dueDate || ''),
+        visitUrl: normalizeTaskUrl(task.visitUrl || task.url || ''),
+        estimatedCost: normalizeEstimatedCost(task.estimatedCost || 0),
+        done: includeDone ? Boolean(task.done) : Boolean(task.done)
+      };
+    }
+
+    function normalizePlannerState(raw = {}) {
+      const normalized = createEmptyPlannerState();
+      normalized.moveDate = normalizeDateValue(raw.moveDate || '') || '';
+      const rawTasks = Array.isArray(raw.tasks) ? raw.tasks : [];
+      const rawCustom = Array.isArray(raw.customTasks) ? raw.customTasks : [];
+      const normalizedTasks = rawTasks.map(task => normalizePlannerTask(task));
+      const normalizedCustomTasks = rawCustom.map(task => ({
+        ...normalizePlannerTask(task),
+        isCustom: true
+      }));
+      const seenTaskIds = new Set(normalizedTasks.map(task => task.id));
+      normalizedCustomTasks.forEach((task) => {
+        if (!seenTaskIds.has(task.id)) {
+          normalizedTasks.push(task);
+          seenTaskIds.add(task.id);
+        }
+      });
+      normalized.tasks = normalizedTasks;
+      normalized.customTasks = normalizedTasks.filter(task => task?.isCustom === true);
+      normalized.notes = typeof raw.notes === 'string' ? raw.notes : '';
+      normalized.theme = raw.theme === 'dark' ? 'dark' : 'light';
+      normalized.updatedAt = Number(raw.updatedAt) || 0;
+      const rawBudget = raw.budget && typeof raw.budget === 'object' && !Array.isArray(raw.budget)
+        ? raw.budget
+        : {};
+      normalized.budget = {};
+      Object.keys(rawBudget).forEach((key) => {
+        if (typeof rawBudget[key] === 'number') {
+          normalized.budget[key] = rawBudget[key];
+          return;
+        }
+        const num = Number(rawBudget[key]);
+        if (Number.isFinite(num)) {
+          normalized.budget[key] = num;
+        }
+      });
+      const schedule = raw.schedule && typeof raw.schedule === 'object' ? raw.schedule : {};
+      const rawEvents = safeParseJsonObject(schedule.events, {});
+      normalized.schedule = {
+        selectedDate: normalizeDateValue(schedule.selectedDate || ''),
+        calendarCollapsed: Boolean(schedule.calendarCollapsed),
+        events: rawEvents
+      };
+      return normalized;
+    }
+
+    function getPlannerTasksForRender(state = {}) {
+      const plannerTasks = Array.isArray(state.tasks) ? state.tasks : [];
+      const customTasks = Array.isArray(state.customTasks) ? state.customTasks : [];
+      const merged = [];
+      const usedIds = new Set();
+      const customById = new Map();
+
+      plannerTasks.forEach(task => {
+        const normalized = normalizePlannerTask(task);
+        const id = normalized.id || generateTaskId();
+        normalized.id = id;
+        merged.push(normalized);
+        usedIds.add(id);
+      });
+
+      customTasks.forEach(task => {
+        if (!task || !task.id) return;
+        if (usedIds.has(task.id)) return;
+        const normalized = normalizePlannerTask(task);
+        normalized.id = task.id || generateTaskId();
+        normalized.isCustom = true;
+        customById.set(normalized.id, normalized);
+      });
+
+      customById.forEach(task => merged.push(task));
+      return merged;
+    }
+
+    function collectTaskStateFromDom() {
+      const taskCards = getAllTaskCards();
+      const plannerTasks = taskCards.map((task) => {
+        const id = task.dataset.taskId || generateTaskId();
+        const checkbox = task.querySelector('[data-task]');
+        const title = task.querySelector('.task-title');
+        const desc = task.querySelector('.task-desc');
+        const prioritySelect = task.querySelector('.task-priority');
+        const dueOffset = getStoredDueOffset(task);
+        const dueDate = getTaskDueDateValue(task);
+        const visitUrl = normalizeTaskUrl(task.dataset.visitUrl || task.getAttribute('data-url') || '');
+        const estimatedCost = getTaskEstimatedCost(task);
+        const section = normalizeTaskSection(task.dataset.section || getTaskSection(task));
+
+        task.dataset.taskId = id;
+
+        return {
+          id,
+          title: normalizeTaskText(title?.textContent || ''),
+          desc: normalizeTaskText(desc?.textContent || ''),
+          priority: prioritySelect && prioritySelect.value ? prioritySelect.value : getTaskPriority(task),
+          isCustom: task.dataset.customTask === 'true',
+          done: Boolean(checkbox?.checked),
+          section,
+          dueOffset,
+          dueDate,
+          visitUrl,
+          estimatedCost
+        };
+      });
+      return plannerTasks;
+    }
+
+    function applyPlannerStateToRuntimeState(nextState = {}) {
+      plannerState = normalizePlannerState(nextState);
+      plannerState.customTasks = Array.isArray(plannerState.customTasks) ? plannerState.customTasks : [];
+      return plannerState;
+    }
+
+    function applyPlannerStateAndRenderState(nextState = {}, reason = 'state-render', options = {}) {
+      const normalized = applyPlannerStateToRuntimeState(nextState);
+      renderTaskCardsFromPlanner(normalized);
+      applyPlannerStateToDom(normalized);
+      updateProgress();
+      if (options.persist !== false) {
+        persistPlannerStateToStorage(plannerState, reason);
+      }
+      setLastStateMutationSource('applyPlannerStateAndRenderState', reason);
+      updatePlannerDebugSummary();
+      console.log(
+        `[State Update] source=${normalizeSyncReason(reason)} taskCount=${plannerState.tasks.length} ` +
+        `checkedCount=${plannerState.tasks.filter(task => task?.done).length}`
+      );
+      return plannerState;
+    }
+
+    function syncPlannerStateFromDOM(reason = 'state-render') {
+      plannerState = normalizePlannerState(plannerState || createEmptyPlannerState());
+      setLastStateMutationSource('syncPlannerStateFromDOM', reason);
+      return plannerState;
+    }
+
+    function persistPlannerStateFromInputs(reason = 'state-render') {
+      plannerState = normalizePlannerState(plannerState || createEmptyPlannerState());
+      return persistPlannerStateToStorage(plannerState, reason);
+    }
+
+    function updateTaskStateInPlanner(taskId, updater, options = {}) {
+      if (!taskId) return null;
+      let updatedTask = null;
+      const nextTasks = (Array.isArray(plannerState?.tasks) ? plannerState.tasks : []).map((task) => {
+        if (task?.id !== taskId) return task;
+        updatedTask = normalizePlannerTask({
+          ...task,
+          ...(typeof updater === 'function' ? updater(task) : updater)
+        });
+        return updatedTask;
+      });
+      if (!updatedTask) return null;
+      plannerState = normalizePlannerState({
+        ...(plannerState || createEmptyPlannerState()),
+        tasks: nextTasks,
+        customTasks: nextTasks.filter(task => task?.isCustom)
+      });
+      const normalizedReason = normalizeSyncReason(options.reason || 'user-task-edit');
+      if (options.render !== false) {
+        applyPlannerStateAndRenderState(plannerState, normalizedReason);
+      } else {
+        persistPlannerStateToStorage(plannerState, normalizedReason);
+        updatePlannerDebugSummary();
+      }
+      if (options.shouldSync) {
+        queuePlannerSync(normalizedReason);
+      }
+      console.log(
+        `[State Update] source=${normalizedReason} ` +
+        `taskCount=${plannerState.tasks.length} checkedCount=${plannerState.tasks.filter(task => task?.done).length}`
+      );
+      return updatedTask;
+    }
 
     function normalizeTaskText(value) {
       return (value || '').replace(/\n/g, ' ').trim();
@@ -3000,8 +3248,13 @@
       calendarToggle.setAttribute('aria-expanded', String(!isCollapsed));
       calendarToggle.textContent = isCollapsed ? '캘린더 펼치기' : '캘린더 접기';
       if (save) {
-        localStorage.setItem(CALENDAR_COLLAPSE_KEY, isCollapsed ? '1' : '0');
-        notifyStorageSync('calendar-collapse');
+        persistPlannerStateToStorage({
+          ...(plannerState || createEmptyPlannerState()),
+          schedule: {
+            ...(plannerState?.schedule || {}),
+            calendarCollapsed: isCollapsed
+          }
+        }, 'state-render');
       }
     }
 
@@ -3014,7 +3267,7 @@
     }
 
     function getMoveDateKey() {
-      return normalizeDateValue(moveDateInput?.value || localStorage.getItem('txMoveMoveDate') || '');
+      return normalizeDateValue(moveDateInput?.value || plannerState?.moveDate || '');
     }
 
     function normalizeDueOffset(value) {
@@ -3236,17 +3489,6 @@
       }
     }
 
-    function getMutationReasonFromStorageKey(key) {
-      const pending = normalizeSyncReason(pendingStateMutationReason);
-      if (pending && pending !== 'none' && !pending.startsWith('storage-')) {
-        return pending;
-      }
-      if (key in STORAGE_KEY_REASON_MAP) {
-        return STORAGE_KEY_REASON_MAP[key];
-      }
-      return pending;
-    }
-
     function summarizePlannerForPayload(planner = {}) {
       const normalizedPlanner = planner && typeof planner === 'object' ? planner : {};
       const tasks = Array.isArray(normalizedPlanner.tasks) ? normalizedPlanner.tasks : [];
@@ -3290,17 +3532,43 @@
       }
     }
 
+    function setLastStorageSaveSource(source = 'none') {
+      lastStorageSaveSource = String(source || 'none');
+      if (lastAllowedPostSourceEl) {
+        lastAllowedPostSourceEl.textContent = lastStorageSaveSource;
+      }
+    }
+
+    function setLastHydrateSource(source = 'none') {
+      lastHydrateSource = String(source || 'none');
+      if (lastAllowedPostReasonEl) {
+        lastAllowedPostReasonEl.textContent = lastHydrateSource;
+      }
+    }
+
+    function updatePlannerDebugSummary() {
+      const tasks = Array.isArray(plannerState?.tasks) ? plannerState.tasks : [];
+      const checked = tasks.filter(task => task?.done).length;
+      if (lastAllowedPostPayloadEl) {
+        lastAllowedPostPayloadEl.textContent = `${tasks.length} / ${checked}`;
+      }
+      if (plannerTaskSummaryEl) {
+        plannerTaskSummaryEl.textContent = `${tasks.length} / ${checked}`;
+      }
+    }
+
     function getStateSnapshotFromStorage() {
-      const planner = getPlannerPayloadFromStorage();
+      const planner = normalizePlannerState(plannerState);
       const tasks = Array.isArray(planner.tasks) ? planner.tasks : [];
       const budgetSummary = buildBudgetSummary(planner);
+      const effectiveUpdatedAt = Number(localLastModifiedAt) || Number(lastRemoteAppliedAt) || Date.now();
       return {
         moveDate: planner.moveDate || '',
         taskCount: tasks.length,
         checkedTaskCount: tasks.filter(task => task?.done).length,
         notesLength: typeof planner.notes === 'string' ? planner.notes.length : String(planner.notes || '').length,
         budgetSummary,
-        updatedAt: Number(planner.updatedAt) || Date.now(),
+        updatedAt: effectiveUpdatedAt,
         lastServerRevision,
         localLastModifiedAt,
         lastStateMutationSource,
@@ -3315,8 +3583,9 @@
     function getStateSnapshotFromDOM(label = '') {
       const tasks = getAllTaskCards();
       const checked = tasks.filter(task => task.querySelector('[data-task]')?.checked).length;
-      const plannerPayload = getPlannerPayloadFromStorage();
+      const plannerPayload = plannerState || getPlannerPayloadFromStorage();
       const budgetSummary = buildBudgetSummary(plannerPayload);
+      const effectiveUpdatedAt = Number(localLastModifiedAt) || Number(lastRemoteAppliedAt) || Date.now();
       return {
         label,
         moveDate: moveDateInput?.value || '',
@@ -3324,7 +3593,7 @@
         checkedTaskCount: checked,
         notesLength: (notes?.value || '').length,
         budgetSummary,
-        updatedAt: Date.now(),
+        updatedAt: effectiveUpdatedAt,
         lastServerRevision,
         localLastModifiedAt,
         lastStateMutationSource,
@@ -3458,7 +3727,7 @@
       );
 
       if (templateOnlyMatch) {
-        return false;
+        return hasAnyUserSignal;
       }
 
       return hasAnyUserSignal;
@@ -3469,6 +3738,10 @@
       const after = extra.after || {};
       const context = getStateSnapshotFromDOM();
       const diff = diffStateSummary(before, after);
+      console.log(
+        `[STATE] source=${functionName || 'none'} reason=${normalizeSyncReason(reason)} ` +
+        `tasks=${context.taskCount} checked=${context.checkedTaskCount} updatedAt=${context.updatedAt}`
+      );
       console.log(`[Planner Mutation] ${functionName}`, {
         source: summarySource,
         reason,
@@ -3491,17 +3764,31 @@
     }
 
     let pendingStorageRefresh = null;
-    const STORAGE_REWRITE_PREFIX = 'txMove';
-    const originalSetItem = localStorage.setItem.bind(localStorage);
-    const originalRemoveItem = localStorage.removeItem.bind(localStorage);
+
+    function hasMeaningfulLocalPlannerCache() {
+      const storageMeta = getPlannerPayloadFromStorageWithMetadata();
+      return hasPlannerMeaningfulUserData(storageMeta.planner)
+        || (Array.isArray(storageMeta.planner?.tasks) && storageMeta.planner.tasks.length > 0)
+        || storageMeta.keyPresence.txMoveTasks;
+    }
+
+    function hasPendingLocalChanges() {
+      return localSyncInProgress || Number(localLastModifiedAt) > 0;
+    }
+
+    function shouldWriteLocalUpdatedAt(reason) {
+      const normalizedReason = normalizeSyncReason(reason);
+      return normalizedReason.startsWith('user-')
+        || normalizedReason === 'theme'
+        || normalizedReason === 'default-seed'
+        || normalizedReason === 'load-state-legacy';
+    }
 
     function queuePlannerSync(reason = '', metadata = {}) {
-      const triggerSource = normalizeSyncReason(metadata?.source || '');
       const before = getStateSnapshotFromDOM('queue-before');
       const effectiveReason = normalizeSyncReason(reason || plannerSyncReason || pendingStateMutationReason);
-      const isStorageHook = triggerSource === 'local-storage-hook';
       const isBlockedReason = !isAllowedUserPostReason(effectiveReason);
-      const isBlockedPath = isStorageHook || isSyncSourceBlockedByPath(effectiveReason);
+      const isBlockedPath = isSyncSourceBlockedByPath(effectiveReason);
 
       if (isHydratingInitialState || isApplyingRemoteState || !hasCompletedInitialLoad) {
         console.log('[Planner Sync] POST blocked because hydration not finished', {
@@ -3517,13 +3804,13 @@
       if (isBlockedPath || isBlockedReason) {
         console.log('[Planner Sync] POST blocked because non-user mutation reason', {
           reason: effectiveReason,
-          triggerSource
+          triggerSource: normalizeSyncReason(metadata?.source || '')
         });
         setLastStateMutationSource('queuePlannerSync', 'blocked-non-user');
         logStateMutation('queuePlannerSync', 'blocked', 'remote-block', {
           before,
           after: before,
-          reason: isBlockedReason ? 'non-user-reason' : triggerSource,
+          reason: isBlockedReason ? 'non-user-reason' : 'blocked-path',
           mutationReason: effectiveReason
         });
         clearLastAllowedPostDebug();
@@ -3535,7 +3822,7 @@
       setPlannerSyncStatus('동기화 진행 중', false);
       plannerSyncReason = effectiveReason;
       setLastStateMutationSource('queuePlannerSync', 'local-change-queue');
-      updateServerSyncCard(getPlannerPayloadFromStorage(), '', '동기화 진행 중');
+      updateServerSyncCard(plannerState || getPlannerPayloadFromStorage(), '', '동기화 진행 중');
       const after = getStateSnapshotFromDOM('queue-after');
       logStateMutation('queuePlannerSync', 'local-change', 'state', { before, after });
       if (plannerSyncTimer) {
@@ -3547,8 +3834,8 @@
       }, 220);
     }
 
-    function requestServerSync(source = 'user-manual-sync-save') {
-      queuePlannerSync(source);
+    function requestServerSync(source = 'user-manual-save') {
+      return loadPlannerDataFromServer(true);
     }
 
     function buildPlannerPayloadSummary(payload = {}) {
@@ -3659,6 +3946,51 @@
       return parsed;
     }
 
+    function parseStoredJsonTaskState(value, fallback = []) {
+      const parsed = parseJsonWithMeta(value, fallback);
+      if (Array.isArray(parsed.value)) {
+        return {
+          value: parsed.value,
+          parsed: parsed.parsed,
+          missing: parsed.missing,
+          source: parsed.source
+        };
+      }
+
+      if (!parsed.parsed || parsed.missing) {
+        return {
+          value: fallback,
+          parsed: parsed.parsed,
+          missing: parsed.missing,
+          source: parsed.source
+        };
+      }
+
+      const rawValue = parsed.value;
+      if (rawValue && typeof rawValue === 'object' && !Array.isArray(rawValue)) {
+        const wrappedTasks =
+          (Array.isArray(rawValue.tasks) ? rawValue.tasks : null)
+          || (Array.isArray(rawValue.planner?.tasks) ? rawValue.planner.tasks : null)
+          || (Array.isArray(rawValue.state?.tasks) ? rawValue.state.tasks : null)
+          || (Array.isArray(rawValue.data?.tasks) ? rawValue.data.tasks : null);
+        if (Array.isArray(wrappedTasks)) {
+          return {
+            value: wrappedTasks,
+            parsed: parsed.parsed,
+            missing: false,
+            source: 'parsed-wrapper'
+          };
+        }
+      }
+
+      return {
+        value: fallback,
+        parsed: parsed.parsed,
+        missing: parsed.missing,
+        source: parsed.source === 'invalid-json' ? 'invalid-json' : 'type-mismatch'
+      };
+    }
+
     function parseStoredJsonObject(value, fallback = {}) {
       const parsed = parseJsonWithMeta(value, fallback);
       const parsedValue = parsed.value;
@@ -3696,6 +4028,7 @@
         moveDate: String(storage.txMoveMoveDate || ''),
         notes: String(storage.txMoveNotes || ''),
         theme: storage.txMoveTheme || 'light',
+        updatedAt: Number(storage.txMoveLocalUpdatedAt) || 0,
         tasks: safeParseJsonArray(storage.txMoveTaskState),
         budget: safeParseJsonObject(storage.txMoveBudget, {}),
         customTasks: safeParseJsonArray(storage.txMoveCustomTasks),
@@ -3707,44 +4040,191 @@
       };
     }
 
-    function getPlannerPayloadFromStorage() {
-      const taskState = safeParseJsonArray(localStorage.getItem('txMoveTaskState'));
+    function getPlannerPayloadFromStorageWithMetadata() {
+      const rawPlannerState = localStorage.getItem(PLANNER_STATE_STORAGE_KEY);
+      const rawLocalUpdatedAt = localStorage.getItem('txMoveLocalUpdatedAt');
+      const rawLocalRevision = localStorage.getItem(TASK_STORAGE_REVISION_KEY) || '';
+      const parsedRevisionTs = Number(String(rawLocalRevision).split('-')[0]);
+      const parsedPlannerMeta = parseStoredJsonObject(rawPlannerState, createEmptyPlannerState());
+      const legacyStorage = {
+        txMoveTaskState: localStorage.getItem('txMoveTaskState'),
+        txMoveCustomTasks: localStorage.getItem('txMoveCustomTasks'),
+        txMoveBudget: localStorage.getItem('txMoveBudget'),
+        txMoveMoveDate: localStorage.getItem('txMoveMoveDate'),
+        txMoveNotes: localStorage.getItem('txMoveNotes'),
+        txMoveTheme: localStorage.getItem('txMoveTheme'),
+        txMoveSelectedScheduleDate: localStorage.getItem('txMoveSelectedScheduleDate'),
+        txMoveCalendarCollapsed: localStorage.getItem(CALENDAR_COLLAPSE_KEY),
+        txMoveScheduleEvents: localStorage.getItem('txMoveScheduleEvents'),
+        txMoveGoogleConnected: localStorage.getItem('txMoveGoogleConnected'),
+        txMoveLocalUpdatedAt: rawLocalUpdatedAt
+      };
+      const legacyPlanner = normalizePlannerState(getPlannerFromLegacyStorage(legacyStorage));
+      const legacyKeyPresence = {
+        txMoveTaskState: legacyStorage.txMoveTaskState !== null,
+        txMoveTasks: localStorage.getItem('txMoveTasks') !== null,
+        txMoveCustomTasks: legacyStorage.txMoveCustomTasks !== null,
+        txMoveBudget: legacyStorage.txMoveBudget !== null,
+        txMoveMoveDate: legacyStorage.txMoveMoveDate !== null,
+        txMoveNotes: legacyStorage.txMoveNotes !== null,
+        txMoveSelectedScheduleDate: legacyStorage.txMoveSelectedScheduleDate !== null,
+        txMoveScheduleEvents: legacyStorage.txMoveScheduleEvents !== null,
+        txMoveTheme: legacyStorage.txMoveTheme !== null,
+        txMoveCalendarCollapsed: legacyStorage.txMoveCalendarCollapsed !== null,
+        txMoveGoogleConnected: legacyStorage.txMoveGoogleConnected !== null
+      };
+      const hasLegacyPresence = Object.values(legacyKeyPresence).some(Boolean);
+      const hasCanonicalPlannerState = rawPlannerState !== null
+        && parsedPlannerMeta.parsed
+        && parsedPlannerMeta.source !== 'type-mismatch';
+      const planner = hasCanonicalPlannerState
+        ? normalizePlannerState(parsedPlannerMeta.value)
+        : (hasLegacyPresence ? legacyPlanner : createEmptyPlannerState());
+      const keyPresence = {
+        txMovePlannerState: rawPlannerState !== null,
+        ...legacyKeyPresence
+      };
+      const localUpdatedAtSource = Number(rawLocalUpdatedAt);
+      const localUpdatedAt = Number.isFinite(localUpdatedAtSource)
+        ? localUpdatedAtSource
+        : (Number.isFinite(parsedRevisionTs) ? parsedRevisionTs : 0);
+      const hasAnyStoragePresence = Object.values(keyPresence).some(Boolean);
+      const hasFullStoragePresence = Object.values(keyPresence).every(Boolean);
+      const hasPartialStorageMissing = hasAnyStoragePresence && !hasFullStoragePresence;
+      const parseFailed = parsedPlannerMeta.source === 'invalid-json' || parsedPlannerMeta.source === 'type-mismatch';
+
       return {
-        moveDate: localStorage.getItem('txMoveMoveDate') || '',
-        notes: localStorage.getItem('txMoveNotes') || '',
-        budget: safeParseJsonObject(localStorage.getItem('txMoveBudget'), {}),
-        theme: localStorage.getItem('txMoveTheme') || 'light',
-        tasks: taskState,
-        customTasks: safeParseJsonArray(localStorage.getItem('txMoveCustomTasks')),
-        schedule: {
-          selectedDate: localStorage.getItem('txMoveSelectedScheduleDate') || '',
-          calendarCollapsed: localStorage.getItem(CALENDAR_COLLAPSE_KEY) === '1',
-          events: safeParseJsonObject(localStorage.getItem('txMoveScheduleEvents'), {})
-        }
+        planner,
+        taskStateMeta: {
+          value: Array.isArray(planner.tasks) ? planner.tasks : [],
+          parsed: hasCanonicalPlannerState || hasLegacyPresence,
+          missing: !hasCanonicalPlannerState && !hasLegacyPresence,
+          source: hasCanonicalPlannerState ? 'planner-storage' : (hasLegacyPresence ? 'legacy-storage' : 'missing')
+        },
+        localUpdatedAt: Number.isFinite(localUpdatedAt) ? localUpdatedAt : 0,
+        keyPresence,
+        hasAnyStoragePresence,
+        hasFullStoragePresence,
+        hasPartialStorageMissing,
+        parseFailed
       };
     }
 
-    localStorage.setItem = function(key, value) {
-      const normalizedValue = value == null ? '' : String(value);
-      originalSetItem.call(this, key, normalizedValue);
-      if (!isHydratingInitialState && !isApplyingRemoteState && String(key).startsWith(STORAGE_REWRITE_PREFIX)) {
-        const reason = getMutationReasonFromStorageKey(key);
-        queuePlannerSync(reason, { source: 'local-storage-hook', key });
-      }
+    window.__plannerSyncDebug = function plannerSyncDebug() {
+      const rawLocalUpdatedAt = localStorage.getItem('txMoveLocalUpdatedAt');
+      const parsedLocalUpdatedAt = Number(rawLocalUpdatedAt);
+      const rawStorageRevision = localStorage.getItem(TASK_STORAGE_REVISION_KEY);
+      const payloadMeta = getPlannerPayloadFromStorageWithMetadata();
+      const hasMeaningfulLocalPlannerState = hasPlannerMeaningfulUserData(payloadMeta.planner);
+      const taskState = Array.isArray(payloadMeta.planner?.tasks) ? payloadMeta.planner.tasks : [];
+
+      return {
+        savedAt: new Date().toISOString(),
+        txMovePlannerStateCount: taskState.length,
+        txMovePlannerStateCheckedCount: taskState.filter((task) => Boolean(task && task.done)).length,
+        txMoveLocalUpdatedAt: Number.isFinite(parsedLocalUpdatedAt) ? parsedLocalUpdatedAt : 0,
+        txMoveStorageRevision: rawStorageRevision,
+        hasMeaningfulLocalPlannerState,
+        localSyncInProgress,
+        hasCompletedInitialLoad,
+        isHydratingInitialState,
+        isApplyingRemoteState,
+        lastServerRevision,
+        lastRemoteAppliedAt,
+        lastSyncRequestAt,
+        currentPlannerState: {
+          taskCount: Array.isArray(plannerState?.tasks) ? plannerState.tasks.length : 0,
+          checkedCount: Array.isArray(plannerState?.tasks)
+            ? plannerState.tasks.filter((task) => Boolean(task && task.done)).length
+            : 0
+        },
+        parseState: {
+          taskStateParseSource: payloadMeta.taskStateMeta?.source || 'missing',
+          taskStateMissing: payloadMeta.taskStateMeta?.missing || false,
+          taskStateParsed: payloadMeta.taskStateMeta?.parsed || false,
+          parseFailed: payloadMeta.parseFailed
+        }
+      };
     };
 
-    localStorage.removeItem = function(key) {
-      originalRemoveItem.call(this, key);
-      if (!isHydratingInitialState && !isApplyingRemoteState && String(key).startsWith(STORAGE_REWRITE_PREFIX)) {
-        const reason = getMutationReasonFromStorageKey(key);
-        queuePlannerSync(reason, { source: 'local-storage-hook', key });
+    function getPlannerPayloadFromStorage() {
+      return getPlannerPayloadFromStorageWithMetadata().planner;
+    }
+
+    function hasLocalTaskStatePriority() {
+      return hasPendingLocalChanges();
+    }
+
+    function getStoredTaskStateForDebug() {
+      const payloadMeta = getPlannerPayloadFromStorageWithMetadata();
+      return Array.isArray(payloadMeta.planner?.tasks) ? payloadMeta.planner.tasks : [];
+    }
+
+    function getStoredTaskStateMeta() {
+      return getPlannerPayloadFromStorageWithMetadata().taskStateMeta;
+    }
+
+    function readLegacyDoneMapFromStorage() {
+      const rawLegacyDone = localStorage.getItem('txMoveTasks');
+      try {
+        const parsed = JSON.parse(rawLegacyDone || '[]');
+        return Array.isArray(parsed) ? parsed.map((value) => Boolean(value)) : [];
+      } catch {
+        return [];
       }
-    };
+    }
+
+    function persistPlannerStateToStorage(nextState = plannerState, reason = 'local-storage-write') {
+      const planner = normalizePlannerState(nextState);
+      const normalizedReason = normalizeSyncReason(reason || pendingStateMutationReason || 'local-storage-write');
+      const nextUpdatedAt = shouldWriteLocalUpdatedAt(normalizedReason)
+        ? Date.now()
+        : (Number(planner.updatedAt) || Number(localStorage.getItem('txMoveLocalUpdatedAt')) || 0);
+      planner.updatedAt = nextUpdatedAt;
+      plannerState = planner;
+      const nextLocalUpdatedAt = shouldWriteLocalUpdatedAt(normalizedReason)
+        ? String(nextUpdatedAt)
+        : (localStorage.getItem('txMoveLocalUpdatedAt') || '0');
+
+      const before = getStateSnapshotFromStorage();
+      withMutationReason(normalizedReason, () => {
+        localStorage.setItem(PLANNER_STATE_STORAGE_KEY, JSON.stringify(planner));
+        localStorage.setItem('txMoveLocalUpdatedAt', nextLocalUpdatedAt);
+      });
+      setLastStorageSaveSource(normalizedReason);
+      updatePlannerDebugSummary();
+      const persistTaskCount = Array.isArray(planner.tasks) ? planner.tasks.length : 0;
+      const persistCheckedCount = Array.isArray(planner.tasks) ? planner.tasks.filter(task => task?.done).length : 0;
+      console.log(
+        `[Storage Save] source=${normalizedReason}, taskCount=${persistTaskCount}, checkedCount=${persistCheckedCount}`
+      );
+      notifyStorageSync(`planner-write:${reason || 'auto'}`);
+      if (!reason || reason === 'local-storage-write') {
+        setLastStateMutationSource('persistPlannerStateToStorage', reason);
+      }
+      const after = getStateSnapshotFromStorage();
+      logStateMutation('persistPlannerStateToStorage', reason || 'local-storage-write', 'local-storage-write', { before, after });
+      if (plannerTaskSummaryEl) {
+        const taskCount = Array.isArray(planner.tasks) ? planner.tasks.length : 0;
+        const checkedCount = Array.isArray(planner.tasks) ? planner.tasks.filter(task => task?.done).length : 0;
+        plannerTaskSummaryEl.textContent = `${taskCount} / ${checkedCount}`;
+      }
+      if (lastServerSaveAtEl && lastServerSaveAt) {
+        lastServerSaveAtEl.textContent = new Date(lastServerSaveAt).toLocaleString('ko-KR');
+      }
+      if (lastServerLoadAtEl && lastServerLoadAt) {
+        lastServerLoadAtEl.textContent = new Date(lastServerLoadAt).toLocaleString('ko-KR');
+      }
+      if (plannerSyncStatus && plannerSyncStatus.textContent === '대기 중') {
+        plannerSyncStatus.textContent = '로컬 반영됨';
+      }
+      return planner;
+    }
 
     function buildPlannerPayload() {
-      const planner = getPlannerPayloadFromStorage();
+      const planner = normalizePlannerState(plannerState);
       return {
-        updatedAt: Date.now(),
+        updatedAt: Number(planner.updatedAt) || Date.now(),
         planner
       };
     }
@@ -3764,45 +4244,9 @@
       isApplyingRemoteState = true;
       const beforeWrite = getStateSnapshotFromStorage();
 
-      const moveDate = planner.moveDate || '';
-      const notes = planner.notes || '';
-      const theme = planner.theme === 'dark' ? 'dark' : 'light';
-      const budget = safeParseJsonObject(planner.budget, {});
-      const tasks = safeParseJsonArray(planner.tasks);
-      const providedCustomTasks = safeParseJsonArray(planner.customTasks);
-      const customTasks = providedCustomTasks.length
-        ? providedCustomTasks
-        : tasks.filter(task => task?.isCustom).map(task => ({
-          id: task.id || generateTaskId(),
-          title: String(task.title || ''),
-          desc: String(task.desc || ''),
-          priority: task.priority || 'mid',
-          section: normalizeTaskSection(task.section || 'before-move'),
-          dueOffset: task.dueOffset,
-          dueDate: task.dueDate || '',
-          visitUrl: task.visitUrl || '',
-          estimatedCost: normalizeEstimatedCost(task.estimatedCost),
-          done: Boolean(task.done)
-        }));
-      const schedule = planner.schedule && typeof planner.schedule === 'object' ? planner.schedule : {};
-      const selectedDate = schedule.selectedDate || '';
-      const calendarCollapsed = Boolean(schedule.calendarCollapsed);
-      const events = safeParseJsonObject(schedule.events, {});
-
-      const nextRevisionKey = `txMoveStorageRevision-migrated-${Date.now()}`;
       try {
-        localStorage.setItem('txMoveMoveDate', String(moveDate));
-        localStorage.setItem('txMoveNotes', String(notes));
-        localStorage.setItem('txMoveTheme', theme);
-        localStorage.setItem('txMoveTaskState', JSON.stringify(tasks));
-        localStorage.setItem('txMoveTasks', JSON.stringify(tasks.map(task => Boolean(task?.done))));
-        localStorage.setItem('txMoveCustomTasks', JSON.stringify(customTasks));
-        localStorage.setItem('txMoveBudget', JSON.stringify(budget));
-        localStorage.setItem('txMoveGoogleConnected', planner.googleConnected === true ? '1' : '');
-        localStorage.setItem(CALENDAR_COLLAPSE_KEY, calendarCollapsed ? '1' : '0');
-        localStorage.setItem('txMoveSelectedScheduleDate', String(selectedDate));
-        localStorage.setItem('txMoveScheduleEvents', JSON.stringify(events));
-        localStorage.setItem(TASK_STORAGE_REVISION_KEY, nextRevisionKey);
+        const normalized = normalizePlannerState(planner);
+        applyPlannerStateAndRenderState(normalized, source, { persist: true });
       } finally {
         const after = getStateSnapshotFromStorage();
         logStateMutation('applyPlannerStateToLocalStorage', source, 'remote-get', { before: beforeWrite, after });
@@ -3836,7 +4280,7 @@
                   : null;
 
       if (blockedReason) {
-        console.log('[Planner Sync] POST blocked because hydration not finished', {
+        console.log('[Planner Sync] POST blocked', {
           startedAt: postStartedAt,
           hydrationState: isHydratingInitialState,
           applyingRemote: isApplyingRemoteState,
@@ -3883,13 +4327,13 @@
       setLastStateMutationSource('persistPlannerDataToServer', 'user-change-allowed');
 
       try {
-        const summary = buildPlannerPayloadSummary(payload);
-        const isTemplateOrDefaultPayload = !hasMeaningfulPayload;
-        const allowedSource = 'persistPlannerDataToServer';
-        console.log('[Planner Sync] POST /data start', {
-          startedAt: postStartedAt,
-          localLastModifiedAt,
-          hasPlanner: !!payload?.planner,
+      const summary = buildPlannerPayloadSummary(payload);
+      const isTemplateOrDefaultPayload = !hasMeaningfulPayload;
+      const allowedSource = 'persistPlannerDataToServer';
+      console.log('[Planner Sync] POST /data start', {
+        startedAt: postStartedAt,
+        localLastModifiedAt,
+        hasPlanner: !!payload?.planner,
           source: allowedSource,
           reason: syncReason,
           summary
@@ -3942,11 +4386,23 @@
             : payload.planner;
           updateServerSyncCard(planner, String(remoteRevision), '마지막 저장 성공');
           lastRemoteAppliedAt = remoteRevision;
+          lastServerSaveAt = Date.now();
+          if (lastServerSaveAtEl) {
+            lastServerSaveAtEl.textContent = new Date(lastServerSaveAt).toLocaleString('ko-KR');
+          }
         }
         if (!remoteRevision || localRevisionAtRequest <= remoteRevision) {
           localSyncInProgress = false;
           localLastModifiedAt = 0;
           plannerSyncReason = '';
+        } else {
+          localSyncInProgress = false;
+          localLastModifiedAt = 0;
+          plannerSyncReason = '';
+          console.warn('[Planner Sync] POST response revision is older than request timestamp; reset sync lock manually', {
+            localRevisionAtRequest,
+            remoteRevision
+          });
         }
         logStateMutation('persistPlannerDataToServer', 'success', 'server-save', { before, after });
         console.log('[Planner Sync] POST /data success', {
@@ -3973,14 +4429,30 @@
           before: getStateSnapshotFromStorage(),
           after: getStateSnapshotFromStorage()
         });
-        return;
+        return { applied: false, reason: 'remote-apply-in-progress' };
+      }
+      if (!force && hasPendingLocalChanges()) {
+        setLastStateMutationSource('loadPlannerDataFromServer', 'local-state-priority');
+        console.log('[Planner Sync] GET /data skipped by local priority', {
+          localSyncInProgress,
+          localLastModifiedAt
+        });
+        logStateMutation('loadPlannerDataFromServer', 'skipped', 'remote-block', {
+          before: getStateSnapshotFromStorage(),
+          after: getStateSnapshotFromStorage(),
+          reason: 'local-state-priority'
+        });
+        return { applied: false, reason: 'local-state-priority' };
       }
 
       const getStartedAt = Date.now();
+      const beforeApply = getStateSnapshotFromStorage();
+      const localMeta = getPlannerPayloadFromStorageWithMetadata();
       lastSyncRequestAt = getStartedAt;
-      setLastStateMutationSource('loadPlannerDataFromServer', 'start');
+      setLastStateMutationSource('loadPlannerDataFromServer', force ? 'manual-get-start' : 'hydrate-get-start');
       console.log('[Planner Sync] GET /data start', {
         startedAt: getStartedAt,
+        force,
         localLastModifiedAt,
         localSyncInProgress,
         lastServerRevision,
@@ -3994,207 +4466,97 @@
         }
         const result = await res.json();
         const remoteRevision = Number(result?.updatedAt) || 0;
-        const planner = result?.planner || getPlannerFromLegacyStorage(result?.storage);
-        const beforeApply = getStateSnapshotFromStorage();
+        const normalizedRemotePlanner = normalizePlannerState(result?.planner || getPlannerFromLegacyStorage(result?.storage || {}));
+        const remoteTaskCount = Array.isArray(normalizedRemotePlanner.tasks) ? normalizedRemotePlanner.tasks.length : 0;
+        const remoteCheckedCount = Array.isArray(normalizedRemotePlanner.tasks)
+          ? normalizedRemotePlanner.tasks.filter(task => task?.done).length
+          : 0;
+        const hasRemotePlanner = hasPlannerMeaningfulUserData(normalizedRemotePlanner) || remoteTaskCount > 0;
+        const currentUpdatedAt = Math.max(
+          Number(plannerState?.updatedAt) || 0,
+          Number(localMeta.localUpdatedAt) || 0,
+          Number(lastRemoteAppliedAt) || 0
+        );
         console.log('[Planner Sync] GET /data response', {
           status: res.status,
           updatedAt: remoteRevision,
-          plannerTaskCount: Array.isArray(planner?.tasks) ? planner.tasks.length : 0
+          plannerTaskCount: remoteTaskCount,
+          plannerCheckedCount: remoteCheckedCount
         });
-        if (result?.planner || (result?.storage && typeof result.storage === 'object')) {
-          const syncState = '마지막 불러오기 성공';
-          const notes = planner?.notes || '';
-          updateServerSyncCard({
-            ...planner,
-            notes: typeof notes === 'string' ? notes : String(notes || '')
-          }, remoteRevision, syncState);
-        }
 
-        const hasRemoteData = result?.planner || (result?.storage && typeof result.storage === 'object');
-        const remoteRevisionNum = Number(remoteRevision) || 0;
-        const lastRemoteNum = Number(lastServerRevision) || 0;
-        if (!force && localSyncInProgress && remoteRevisionNum > 0 && localLastModifiedAt > 0 && remoteRevisionNum <= localLastModifiedAt) {
+        if (!hasRemotePlanner) {
           console.log('[Planner Sync] GET /data ignored', {
-            reason: 'local change in progress',
-            remoteUpdatedAt: remoteRevisionNum,
-            localLastModifiedAt
+            reason: 'empty-remote-planner',
+            remoteUpdatedAt: remoteRevision
           });
-          setLastStateMutationSource('loadPlannerDataFromServer', 'ignore-local-in-progress');
-          logStateMutation('loadPlannerDataFromServer', 'ignored', 'remote-response', {
-            before: beforeApply,
-            after: beforeApply,
-            reason: 'local change in progress'
-          });
-          return;
-        }
-
-        if (!force && hasRemoteData && remoteRevisionNum > 0 && lastRemoteAppliedAt > 0 && remoteRevisionNum <= lastRemoteAppliedAt) {
-          console.log('[Planner Sync] GET /data ignored', {
-            reason: 'not newer than last applied',
-            remoteUpdatedAt: remoteRevisionNum,
-            lastRemoteAppliedAt
-          });
-          setLastStateMutationSource('loadPlannerDataFromServer', 'ignore-older-than-applied');
-          logStateMutation('loadPlannerDataFromServer', 'ignored', 'remote-response', {
-            before: beforeApply,
-            after: beforeApply,
-            reason: 'not newer than last applied'
-          });
-          return;
-        }
-
-        if (!force && remoteRevisionNum > 0 && remoteRevisionNum < lastRemoteNum) {
-          console.log('[Planner Sync] GET /data ignored', {
-            reason: 'older remote revision',
-            remoteUpdatedAt: remoteRevisionNum,
-            lastRemoteAppliedAt: lastRemoteNum
-          });
-          setLastStateMutationSource('loadPlannerDataFromServer', 'ignore-older-revision');
-          logStateMutation('loadPlannerDataFromServer', 'ignored', 'remote-response', {
-            before: beforeApply,
-            after: beforeApply,
-            reason: 'older remote revision'
-          });
-          return;
-        }
-
-        const legacyStorage = result?.storage;
-        const hasPlannerPayload = hasPlannerMeaningfulUserData(planner);
-        const hasLocalMeaningfulPlanner = hasPlannerMeaningfulUserData(getPlannerPayloadFromStorage());
-        const hasUsableRemoteRevision = remoteRevisionNum > 0;
-
-        if (!hasPlannerPayload) {
-          const reason = hasRemoteData ? 'empty planner payload' : 'empty response';
-          if (!force) {
-            console.log('[Planner Sync] GET /data ignored', {
-              reason,
-              remoteUpdatedAt: remoteRevisionNum
-            });
-            setLastStateMutationSource('loadPlannerDataFromServer', reason);
-            logStateMutation('loadPlannerDataFromServer', 'ignored', 'remote-response', {
-              before: beforeApply,
-              after: beforeApply,
-              reason
-            });
-            return;
-          }
-          setPlannerSyncStatus('서버 데이터가 비어 있습니다. 로컬 데이터로 동작합니다.', false);
-          setLastStateMutationSource('loadPlannerDataFromServer', 'empty-response-force');
           logStateMutation('loadPlannerDataFromServer', 'empty', 'remote-response', {
             before: beforeApply,
             after: beforeApply,
-            reason
+            reason: 'empty-remote-planner'
           });
-          return;
+          return { applied: false, reason: 'empty-remote-planner' };
         }
 
-        if (!force && !hasUsableRemoteRevision && hasRemotePlannerApplied) {
-          const reason = 'missing remote revision after remote applied';
+        if (!force && remoteRevision > 0 && currentUpdatedAt > 0 && remoteRevision <= currentUpdatedAt) {
           console.log('[Planner Sync] GET /data ignored', {
-            reason,
-            remoteUpdatedAt: remoteRevisionNum,
-            hasRemotePlannerApplied
+            reason: 'not-newer-than-current',
+            remoteUpdatedAt: remoteRevision,
+            currentUpdatedAt
           });
-          setLastStateMutationSource('loadPlannerDataFromServer', reason);
           logStateMutation('loadPlannerDataFromServer', 'ignored', 'remote-response', {
             before: beforeApply,
             after: beforeApply,
-            reason,
-            remoteUpdatedAt: remoteRevisionNum
+            reason: 'not-newer-than-current'
           });
-          return;
+          return { applied: false, reason: 'not-newer-than-current' };
         }
 
-        if (!force && !hasUsableRemoteRevision && hasLocalMeaningfulPlanner) {
-          const reason = 'missing remote revision with local meaningful state';
-          console.log('[Planner Sync] GET /data ignored', {
-            reason,
-            remoteUpdatedAt: remoteRevisionNum,
-            hasLocalMeaningfulPlanner
-          });
-          setLastStateMutationSource('loadPlannerDataFromServer', reason);
-          logStateMutation('loadPlannerDataFromServer', 'ignored', 'remote-response', {
-            before: beforeApply,
-            after: beforeApply,
-            reason,
-            remoteUpdatedAt: remoteRevisionNum
-          });
-          return;
-        }
-
-        setLastStateMutationSource('loadPlannerDataFromServer', 'remote-apply');
-        withMutationReason('remote-apply', () => {
-          applyPlannerStateToLocalStorage(planner);
+        isApplyingRemoteState = true;
+        const appliedPlanner = normalizePlannerState({
+          ...normalizedRemotePlanner,
+          updatedAt: remoteRevision || Number(normalizedRemotePlanner.updatedAt) || Date.now()
         });
-        const applySummary = summarizePlannerForPayload(planner);
+        applyPlannerStateAndRenderState(appliedPlanner, force ? 'manual-sync' : 'hydrate-server');
+        setLastHydrateSource(force ? 'manual-server' : 'server');
+        console.log(
+          `[Hydrate] source=${force ? 'manual-server' : 'server'} ` +
+          `taskCount=${appliedPlanner.tasks.length} checkedCount=${appliedPlanner.tasks.filter(task => task?.done).length}`
+        );
         const afterApply = getStateSnapshotFromStorage();
-        if (!result?.planner && legacyStorage && typeof legacyStorage === 'object' && Object.keys(legacyStorage).length > 0) {
-          setPlannerSyncStatus('서버 데이터 구조를 새 형식으로 마이그레이션했습니다.');
-        }
-
-        lastServerRevision = String(remoteRevisionNum || `${Date.now()}`);
-        lastRemoteAppliedAt = remoteRevisionNum || Date.now();
+        lastServerRevision = String(remoteRevision || appliedPlanner.updatedAt || Date.now());
+        lastRemoteAppliedAt = remoteRevision || appliedPlanner.updatedAt || Date.now();
         hasRemotePlannerApplied = true;
-        if (!localSyncInProgress || localLastModifiedAt <= remoteRevisionNum) {
-          localSyncInProgress = false;
-          localLastModifiedAt = 0;
-        }
+        localSyncInProgress = false;
+        localLastModifiedAt = 0;
+        plannerSyncReason = '';
         logStateMutation('loadPlannerDataFromServer', 'applied', 'remote-get', { before: beforeApply, after: afterApply });
         setLastStateMutationSource('loadPlannerDataFromServer', 'applied');
-        console.log('[Planner Sync] GET /data applied to UI state', {
-          updatedAt: remoteRevisionNum,
-          taskCount: Array.isArray(planner?.tasks) ? planner.tasks.length : 0
-        });
-        console.log('[Planner Sync] remote planner payload', applySummary);
-        setPlannerSyncStatus('');
-        if (force || !document.hidden) {
-          withMutationReason('remote-apply', () => {
-            renderTaskCardsFromPlanner(planner);
-            const plannerSchedule = planner.schedule && typeof planner.schedule === 'object' ? planner.schedule : {};
-            const plannerNotes = planner.notes || '';
-            const plannerMoveDate = planner.moveDate || '';
-            const plannerBudget = planner.budget && typeof planner.budget === 'object' ? planner.budget : {};
-            const plannerTheme = planner.theme === 'dark' ? 'dark' : 'light';
-            const plannerCustomTasks = Array.isArray(planner.customTasks) ? planner.customTasks : [];
-            const plannerEvents = plannerSchedule.events && typeof plannerSchedule.events === 'object' ? plannerSchedule.events : {};
-            const plannerSelectedDate = plannerSchedule.selectedDate || '';
-            const plannerCollapsed = Boolean(plannerSchedule.calendarCollapsed);
-
-            notes.value = typeof plannerNotes === 'string' ? plannerNotes : '';
-            applyTheme(plannerTheme, false);
-            updateMoveDate(plannerMoveDate, false);
-            budgetIds.forEach((id) => {
-              document.getElementById(id).value = plannerBudget[id] || '';
-            });
-            calendarEvents = plannerEvents;
-            if (plannerSelectedDate && /^\d{4}-\d{2}-\d{2}$/.test(plannerSelectedDate)) {
-              selectedScheduleDate = plannerSelectedDate;
-              const parsed = parseDateKey(plannerSelectedDate);
-              if (parsed) {
-                scheduleCursorDate = new Date(parsed.getFullYear(), parsed.getMonth(), 1);
-              }
-            }
-            setCalendarCollapsedState(Boolean(plannerCollapsed), false);
-            updateBudget();
-            renderScheduleCalendar();
-            renderScheduleEvents();
-          });
-          setPlannerSyncStatus('서버 데이터 반영됨');
+        console.log(`[GET applied] updatedAt=${lastRemoteAppliedAt}`);
+        lastServerLoadAt = Date.now();
+        if (lastServerLoadAtEl) {
+          lastServerLoadAtEl.textContent = new Date(lastServerLoadAt).toLocaleString('ko-KR');
         }
+        updateServerSyncCard(appliedPlanner, lastRemoteAppliedAt, '마지막 불러오기 성공');
+        updatePlannerDebugSummary();
+        setPlannerSyncStatus('서버 데이터 반영됨');
+        return {
+          applied: true,
+          reason: force ? 'manual-sync' : 'hydrate-server',
+          planner: appliedPlanner,
+          remoteRevision: lastRemoteAppliedAt
+        };
       } catch (error) {
-        isApplyingRemoteState = false;
         console.error('[Planner Sync] GET /data exception', error);
         setLastStateMutationSource('loadPlannerDataFromServer', 'failed');
         logStateMutation('loadPlannerDataFromServer', 'exception', 'error', {
-          before: getStateSnapshotFromStorage(),
-          after: getStateSnapshotFromStorage()
+          before: beforeApply,
+          after: beforeApply
         });
         setPlannerSyncStatus(`데이터 불러오기 실패: ${error.message || '네트워크 오류'}`, true);
         updateServerSyncCard({}, '', '마지막 불러오기 실패');
-        console.log('[Planner Sync] GET /data failed', {
-          reason: 'exception',
-          error: error.message
-        });
+        return { applied: false, reason: 'exception', error: error.message || 'unknown-error' };
+      } finally {
+        isApplyingRemoteState = false;
       }
     }
 
@@ -4214,26 +4576,15 @@
     }
 
     function pollForStorageSync() {
-      const currentRevision = localStorage.getItem(TASK_STORAGE_REVISION_KEY) || '';
-      if (currentRevision !== lastSeenStorageRevision && currentRevision !== '') {
-        lastSeenStorageRevision = currentRevision;
-        scheduleStorageRefresh();
-      }
+      return;
     }
 
     function startStoragePoll() {
-      if (storagePollTimer) return;
-      storagePollTimer = window.setInterval(pollForStorageSync, 2500);
+      return;
     }
 
     function startPlannerSyncPoll() {
-      if (plannerPollTimer) return;
-      plannerPollTimer = window.setInterval(() => {
-        if (localSyncInProgress) {
-          return;
-        }
-        loadPlannerDataFromServer();
-      }, PLANNER_SYNC_INTERVAL_MS);
+      return;
     }
 
     function isEditingTaskInline() {
@@ -4245,15 +4596,7 @@
     }
 
     function scheduleStorageRefresh() {
-      if (pendingStorageRefresh) {
-        clearTimeout(pendingStorageRefresh);
-      }
-
-      pendingStorageRefresh = setTimeout(() => {
-        if (!document.hidden && !isEditingTaskInline()) {
-          loadState();
-        }
-      }, 140);
+      return;
     }
 
     function getSectionContainer(section) {
@@ -4609,7 +4952,18 @@
 
       const aText = a.querySelector('.task-title')?.textContent?.trim() || '';
       const bText = b.querySelector('.task-title')?.textContent?.trim() || '';
-      return aText.localeCompare(bText);
+      const titleCmp = aText.localeCompare(bText);
+      if (titleCmp !== 0) {
+        return titleCmp;
+      }
+
+      const aId = String(a.dataset.taskId || '');
+      const bId = String(b.dataset.taskId || '');
+      if (aId !== bId) {
+        return aId.localeCompare(bId);
+      }
+
+      return 0;
     }
 
     function sortTasksInSection(sectionKey) {
@@ -4641,13 +4995,11 @@
     }
 
     function getCalendarEvents() {
-      const raw = localStorage.getItem('txMoveScheduleEvents');
-      try {
-        const parsed = JSON.parse(raw || '{}');
-        return typeof parsed === 'object' && parsed !== null ? parsed : {};
-      } catch {
+      const rawPlannerEvents = plannerState?.schedule?.events;
+      if (!rawPlannerEvents || typeof rawPlannerEvents !== 'object' || Array.isArray(rawPlannerEvents)) {
         return {};
       }
+      return rawPlannerEvents || {};
     }
 
     function setCalendarEvents(nextState) {
@@ -4665,14 +5017,19 @@
             googleEventId: item.googleEventId || null
           }));
 
-        if (filtered.length) {
+      if (filtered.length) {
           normalized[dateKey] = filtered;
         }
       });
 
       calendarEvents = normalized;
-      localStorage.setItem('txMoveScheduleEvents', JSON.stringify(calendarEvents));
-      notifyStorageSync('calendar-events');
+      persistPlannerStateToStorage({
+        ...(plannerState || createEmptyPlannerState()),
+        schedule: {
+          ...(plannerState?.schedule || {}),
+          events: normalized
+        }
+      }, 'state-render');
     }
 
     function setGoogleCalendarEvents(nextState) {
@@ -4684,15 +5041,19 @@
       updateGoogleButtons();
       if (connected) {
         setGoogleCalendarStatus('구글 캘린더가 연결되어 있습니다. 월간 동기화 가능.');
-        localStorage.setItem('txMoveGoogleConnected', '1');
-        notifyStorageSync('google-connect');
+        persistPlannerStateToStorage({
+          ...(plannerState || createEmptyPlannerState()),
+          googleConnected: true
+        }, 'state-render');
       } else {
         setGoogleCalendarStatus('구글 캘린더 미연결');
         googleAccessToken = '';
         googleTokenExpiresAt = 0;
         googleCalendarEvents = {};
-        localStorage.removeItem('txMoveGoogleConnected');
-        notifyStorageSync('google-disconnect');
+        persistPlannerStateToStorage({
+          ...(plannerState || createEmptyPlannerState()),
+          googleConnected: false
+        }, 'state-render');
         renderScheduleCalendar();
         renderScheduleEvents();
       }
@@ -5142,8 +5503,8 @@
       themeToggle.setAttribute('aria-pressed', String(nextTheme === 'dark'));
 
       if (save) {
-        localStorage.setItem('txMoveTheme', nextTheme);
-        notifyStorageSync('theme');
+        plannerState.theme = nextTheme;
+        persistPlannerStateToStorage(plannerState, 'theme');
       }
     }
 
@@ -5182,11 +5543,12 @@
 
     function updateMoveDate(dateString, save = true) {
       const before = getStateSnapshotFromDOM('move-date-before');
+      const normalizedDate = normalizeDateValue(dateString);
       const formattedDate = formatMoveDate(dateString);
       const dday = getDdayLabel(dateString);
 
-      moveDateInput.value = dateString || '';
-      moveDateDisplay.textContent = dateString ? formattedDate : '이사 날짜를 입력해 두세요.';
+      moveDateInput.value = normalizedDate || '';
+      moveDateDisplay.textContent = normalizedDate ? formattedDate : '이사 날짜를 입력해 두세요.';
       dDayDisplay.textContent = dday;
       summaryMoveDate.textContent = formattedDate;
       summaryDday.textContent = dday;
@@ -5197,8 +5559,20 @@
       syncAllTaskDueDatesToMoveDate();
 
       if (save) {
-        localStorage.setItem('txMoveMoveDate', dateString || '');
-        notifyStorageSync('move-date');
+        const nextTasks = (Array.isArray(plannerState?.tasks) ? plannerState.tasks : []).map((task) => {
+          const dueOffset = normalizeDueOffset(task?.dueOffset);
+          return normalizePlannerTask({
+            ...task,
+            dueDate: dueOffset === null ? normalizeDateValue(task?.dueDate || '') : getDueDateFromOffset(normalizedDate, dueOffset)
+          });
+        });
+        plannerState = normalizePlannerState({
+          ...(plannerState || createEmptyPlannerState()),
+          moveDate: normalizedDate || '',
+          tasks: nextTasks,
+          customTasks: nextTasks.filter(task => task?.isCustom)
+        });
+        persistPlannerStateToStorage(plannerState, 'user-move-date');
       }
       const after = getStateSnapshotFromDOM('move-date-after');
       setLastStateMutationSource('updateMoveDate', 'user-input');
@@ -5208,56 +5582,7 @@
     function persistTaskState(reason = 'state-render') {
       const before = getStateSnapshotFromStorage();
       const normalizedReason = normalizeSyncReason(reason || pendingStateMutationReason || plannerSyncReason || 'state-render');
-      const taskState = [...taskList.querySelectorAll('.task')].map(task => {
-        const id = task.dataset.taskId || generateTaskId();
-        const checkbox = task.querySelector('[data-task]');
-        const title = task.querySelector('.task-title');
-        const desc = task.querySelector('.task-desc');
-        const prioritySelect = task.querySelector('.task-priority');
-        const section = normalizeTaskSection(task.dataset.section || getTaskSection(task));
-        const dueOffset = getStoredDueOffset(task);
-        const dueDate = getTaskDueDateValue(task);
-        const visitUrl = normalizeTaskUrl(task.dataset.visitUrl || task.dataset.url || task.getAttribute('data-url'));
-        const estimatedCost = getTaskEstimatedCost(task);
-        task.dataset.taskId = id;
-        task.dataset.section = section;
-        task.dataset.visitUrl = visitUrl;
-        task.dataset.estimatedCost = estimatedCost;
-
-        return {
-          id,
-          title: normalizeTaskText(title?.textContent || ''),
-          desc: normalizeTaskText(desc?.textContent || ''),
-          priority: prioritySelect && prioritySelect.value ? prioritySelect.value : getTaskPriority(task),
-          done: Boolean(checkbox?.checked),
-          isCustom: task.dataset.customTask === 'true',
-          section,
-          dueOffset,
-          dueDate,
-          visitUrl,
-          estimatedCost
-        };
-      });
-      withMutationReason(normalizedReason, () => {
-        localStorage.setItem('txMoveTaskState', JSON.stringify(taskState));
-        localStorage.setItem('txMoveTasks', JSON.stringify(taskState.map(task => task.done)));
-        localStorage.setItem(
-          'txMoveCustomTasks',
-          JSON.stringify(taskState.filter(task => task.isCustom).map(task => ({
-            id: task.id,
-            title: task.title,
-            desc: task.desc,
-            priority: task.priority,
-            section: task.section,
-            dueOffset: task.dueOffset,
-            dueDate: task.dueDate,
-            visitUrl: task.visitUrl,
-            estimatedCost: normalizeEstimatedCost(task.estimatedCost),
-            done: task.done
-          })))
-        );
-        notifyStorageSync('persist');
-      });
+      persistPlannerStateToStorage(plannerState, normalizedReason);
       const after = getStateSnapshotFromStorage();
       setLastStateMutationSource('persistTaskState', normalizedReason);
       logStateMutation('persistTaskState', normalizedReason, 'local-storage-write', { before, after });
@@ -5445,7 +5770,6 @@
       taskTotalCost.textContent = formatEstimatedCost(totalCost);
       taskDoneCost.textContent = formatEstimatedCost(doneCost);
       taskRemainCost.textContent = formatEstimatedCost(remainCost);
-      persistTaskState();
       const after = getStateSnapshotFromDOM('progress-after');
       setLastStateMutationSource('updateProgress', 'state-render');
       logStateMutation('updateProgress', 'render', 'ui-render', { before, after });
@@ -5466,8 +5790,18 @@
       budgetIds.forEach(id => {
         budgetState[id] = document.getElementById(id).value;
       });
-      localStorage.setItem('txMoveBudget', JSON.stringify(budgetState));
-      notifyStorageSync('budget');
+      plannerState.budget = budgetState;
+      if (options.persist !== false) {
+        persistPlannerStateToStorage({
+          ...(plannerState || createEmptyPlannerState()),
+          budget: budgetState
+        }, normalizeSyncReason(reason));
+      } else {
+        plannerState = normalizePlannerState({
+          ...(plannerState || createEmptyPlannerState()),
+          budget: budgetState
+        });
+      }
       const after = getStateSnapshotFromDOM('budget-after');
       const normalizedReason = normalizeSyncReason(reason || plannerSyncReason || 'user-budget');
       setLastStateMutationSource('updateBudget', normalizedReason);
@@ -5533,61 +5867,17 @@
 
     function renderTaskCardsFromPlanner(planner = {}) {
       const before = getStateSnapshotFromDOM('render-planner-before');
-      const normalizedPlanner = planner && typeof planner === 'object' ? planner : {};
-      const plannerTasks = Array.isArray(normalizedPlanner.tasks) ? normalizedPlanner.tasks : [];
-      const plannerCustomTasks = Array.isArray(normalizedPlanner.customTasks) ? normalizedPlanner.customTasks : [];
+      const normalizedPlanner = planner && typeof planner === 'object' ? normalizePlannerState(planner) : normalizePlannerState(plannerState || {});
+      const renderTasks = Array.isArray(normalizedPlanner.tasks) ? normalizedPlanner.tasks : [];
+      const inputCheckedCount = renderTasks.filter(task => task?.done).length;
+      const inputTaskSamples = renderTasks.slice(0, 5).map((task) => `${task?.id || 'unknown'}:${Boolean(task?.done)}`);
+      console.log(`[Render Validate] taskCount=${renderTasks.length}, checkedCount=${inputCheckedCount}, sample=${inputTaskSamples.join(', ')}`);
 
       const currentTasks = [...taskList.querySelectorAll('.task')];
       currentTasks.forEach(task => task.remove());
 
-      const usedIds = new Set();
-      const customTaskById = new Map(
-        plannerCustomTasks
-          .filter(task => task && task.id)
-          .map(task => [task.id, task])
-      );
-      const mergedTasks = [];
-
-      plannerTasks.forEach((task) => {
-        if (!task || typeof task !== 'object') return;
-        const normalizedTask = {
-          title: String(task.title || ''),
-          desc: String(task.desc || ''),
-          priority: task.priority || 'mid',
-          id: task.id || task.taskId || generateTaskId(),
-          isCustom: task.isCustom === true,
-          section: normalizeTaskSection(task.section || 'before-move'),
-          dueDate: normalizeDateValue(task.dueDate || ''),
-          dueOffset: normalizeDueOffset(task.dueOffset),
-          visitUrl: normalizeTaskUrl(task.visitUrl || task.url || ''),
-          estimatedCost: normalizeEstimatedCost(task.estimatedCost || 0),
-          done: Boolean(task.done)
-        };
-        if (normalizedTask.isCustom) {
-          customTaskById.delete(normalizedTask.id);
-        }
-        mergedTasks.push(normalizedTask);
-        usedIds.add(normalizedTask.id);
-      });
-
-      customTaskById.forEach((task) => {
-        if (usedIds.has(task.id)) return;
-        mergedTasks.push({
-          title: String(task.title || ''),
-          desc: String(task.desc || ''),
-          priority: task.priority || 'mid',
-          id: task.id || generateTaskId(),
-          isCustom: true,
-          section: normalizeTaskSection(task.section || 'before-move'),
-          dueDate: normalizeDateValue(task.dueDate || ''),
-          dueOffset: normalizeDueOffset(task.dueOffset),
-          visitUrl: normalizeTaskUrl(task.visitUrl || task.url || ''),
-          estimatedCost: normalizeEstimatedCost(task.estimatedCost || 0),
-          done: Boolean(task.done)
-        });
-      });
-
-      mergedTasks.forEach((task) => {
+      const plannerTaskCount = renderTasks.length;
+      renderTasks.forEach((task) => {
         const nextTask = createTaskElement(task);
         if (task.isCustom) {
           nextTask.dataset.customTask = 'true';
@@ -5600,21 +5890,28 @@
       });
 
       sortAllTaskSections();
-      if (planner && Array.isArray(planner.tasks) && planner.tasks.length) {
+      if (Array.isArray(normalizedPlanner.tasks) && normalizedPlanner.tasks.length) {
         syncAllTaskDueDatesToMoveDate();
       }
 
       const after = getStateSnapshotFromDOM('render-planner-after');
+      const renderDomTaskCount = getAllTaskCards().length;
+      const renderDomCheckedCount = getAllTaskCards().filter(task => task.querySelector('[data-task]')?.checked).length;
+      console.log(`[Render Validate] renderedTaskCount=${renderDomTaskCount}, renderedCheckedCount=${renderDomCheckedCount}`);
       setLastStateMutationSource('renderTaskCardsFromPlanner', 'render');
       logStateMutation('renderTaskCardsFromPlanner', 'render', 'ui-render', { before, after });
-      const taskCount = mergedTasks.length;
-      console.log('[Planner Sync] renderTaskCardsFromPlanner', {
-        taskCount,
-        hasCustomTasks: mergedTasks.some(task => task.isCustom)
-      });
+      const renderedCheckedCount = renderTasks.filter(task => task?.done).length;
+      lastRenderedPlannerTaskCount = renderTasks.length;
+      lastRenderedDomTaskCount = renderDomTaskCount;
+      if (plannerTaskSummaryEl) {
+        plannerTaskSummaryEl.textContent = `${lastRenderedPlannerTaskCount} / ${renderedCheckedCount}`;
+      }
+      if (lastRenderTaskSummaryEl) {
+        lastRenderTaskSummaryEl.textContent = `${lastRenderedPlannerTaskCount} / ${renderedCheckedCount}`;
+      }
       return {
-        renderedTaskCount: taskCount,
-        renderedCustomCount: mergedTasks.filter(task => task.isCustom).length
+        renderedTaskCount: lastRenderedPlannerTaskCount,
+        renderedCustomCount: renderTasks.filter(task => task.isCustom).length
       };
     }
 
@@ -5663,7 +5960,18 @@
         stack: stack.split('\n').slice(0, 6).join(' | ')
       });
       withMutationReason(normalizedReason, () => {
-        persistTaskState('default-seed');
+        const templateTasks = collectTaskStateFromDom();
+        const seededPlanner = normalizePlannerState({
+          ...(plannerState || createEmptyPlannerState()),
+          tasks: templateTasks,
+          customTasks: templateTasks.filter(task => task.isCustom)
+        });
+        applyPlannerStateAndRenderState(seededPlanner, normalizedReason);
+        setLastHydrateSource('default');
+        console.log(
+          `[Hydrate] source=default taskCount=${seededPlanner.tasks.length} ` +
+          `checkedCount=${seededPlanner.tasks.filter(task => task?.done).length}`
+        );
         hasTemplateBootstrapRun = true;
       });
       const after = getStateSnapshotFromDOM('seed-after');
@@ -5672,232 +5980,93 @@
       return true;
     }
 
-    function loadState(reason = 'loadState') {
-      const before = getStateSnapshotFromDOM('load-before');
-      setLastStateMutationSource('loadState', reason);
-      if (!templateTaskSignatures.length) {
-        templateTaskSignatures = getTemplateTaskSignatures();
-      }
+    function applyPlannerStateToDom(planner = {}) {
+      const normalizedPlanner = normalizePlannerState(planner);
+      const plannerSchedule = normalizedPlanner.schedule && typeof normalizedPlanner.schedule === 'object'
+        ? normalizedPlanner.schedule
+        : {};
+      const plannerNotes = normalizedPlanner.notes || '';
+      const plannerMoveDate = normalizedPlanner.moveDate || '';
+      const plannerBudget = normalizedPlanner.budget && typeof normalizedPlanner.budget === 'object' ? normalizedPlanner.budget : {};
+      const plannerSelectedDate = normalizeDateValue(plannerSchedule.selectedDate || '');
+      const plannerEvents = plannerSchedule.events && typeof plannerSchedule.events === 'object' ? plannerSchedule.events : {};
+      const plannerCollapsed = Boolean(plannerSchedule.calendarCollapsed);
 
-      const rawStorageState = {
-        txMoveTaskState: localStorage.getItem('txMoveTaskState'),
-        txMoveCustomTasks: localStorage.getItem('txMoveCustomTasks'),
-        txMoveTasks: localStorage.getItem('txMoveTasks'),
-        txMoveBudget: localStorage.getItem('txMoveBudget'),
-        txMoveNotes: localStorage.getItem('txMoveNotes')
-      };
-
-      const keyPresence = {
-        txMoveTaskState: rawStorageState.txMoveTaskState !== null,
-        txMoveCustomTasks: rawStorageState.txMoveCustomTasks !== null,
-        txMoveTasks: rawStorageState.txMoveTasks !== null,
-        txMoveBudget: rawStorageState.txMoveBudget !== null,
-        txMoveNotes: rawStorageState.txMoveNotes !== null
-      };
-      const hasAnyStoragePresence = Object.values(keyPresence).some(Boolean);
-      const hasFullStoragePresence = Object.values(keyPresence).every(Boolean);
-      const hasPartialStorageMissing = hasAnyStoragePresence && !hasFullStoragePresence;
-      const allowTemplateSeed = !hasAnyStoragePresence || hasFullStoragePresence;
-
-      const parsedTaskStateMeta = parseStoredJsonArray(rawStorageState.txMoveTaskState, []);
-      const parsedCustomTasksMeta = parseStoredJsonArray(rawStorageState.txMoveCustomTasks, []);
-      const parsedLegacyTasksMeta = parseStoredJsonArray(rawStorageState.txMoveTasks, []);
-      const parsedBudgetMeta = parseStoredJsonObject(rawStorageState.txMoveBudget, {});
-      const parsedEventsMeta = parseStoredJsonObject(localStorage.getItem('txMoveScheduleEvents'), {});
-      const hasParseError = (meta) => meta.source === 'invalid-json' || meta.source === 'type-mismatch';
-      const parseFailed = [
-        parsedTaskStateMeta,
-        parsedCustomTasksMeta,
-        parsedLegacyTasksMeta,
-        parsedBudgetMeta,
-        parsedEventsMeta
-      ].some(hasParseError);
-
-      if (parseFailed) {
-        const failureSources = {
-          txMoveTaskState: parsedTaskStateMeta.source,
-          txMoveCustomTasks: parsedCustomTasksMeta.source,
-          txMoveTasks: parsedLegacyTasksMeta.source,
-          txMoveBudget: parsedBudgetMeta.source,
-          txMoveScheduleEvents: parsedEventsMeta.source
-        };
-        setLastStateMutationSource('loadState', 'parse-failed-skip');
-        logStateMutation('loadState', 'blocked', 'load-state', {
-          before,
-          after: before,
-          reason: 'parse-failed',
-          failureSources
-        });
-        return;
-      }
-
-      if (hasPartialStorageMissing) {
-        setLastStateMutationSource('loadState', 'partial-storage-missing-skip');
-        logStateMutation('loadState', 'blocked', 'load-state', {
-          before,
-          after: before,
-          reason: 'partial-storage-missing',
-          presence: keyPresence
-        });
-      }
-
-      const savedTaskState = new Map(
-        (Array.isArray(parsedTaskStateMeta.value) ? parsedTaskStateMeta.value : [])
-          .filter(item => item && item.id)
-          .map(item => [item.id, item])
-      );
-      const hasSavedTaskState = savedTaskState.size > 0;
-      const savedCustomTasks = Array.isArray(parsedCustomTasksMeta.value) ? parsedCustomTasksMeta.value : [];
-      const allTasks = [...taskList.querySelectorAll('.task')];
-      const existingIds = new Set(allTasks.map(task => task.dataset.taskId).filter(Boolean));
-
-      savedCustomTasks.forEach(task => {
-        if (!task?.id || existingIds.has(task.id)) return;
-        const customTask = createTaskElement({
-          title: task.title,
-          desc: task.desc,
-          priority: task.priority,
-          isCustom: true,
-          id: task.id,
-          section: task.section,
-          dueDate: task.dueDate,
-          dueOffset: task.dueOffset,
-          visitUrl: task.visitUrl,
-          estimatedCost: task.estimatedCost
-        });
-        appendTaskToSection(customTask, task.section);
-        allTasks.push(customTask);
-        existingIds.add(task.id);
+      notes.value = typeof plannerNotes === 'string' ? plannerNotes : '';
+      applyTheme(normalizedPlanner.theme === 'dark' ? 'dark' : 'light', false);
+      updateMoveDate(plannerMoveDate, false);
+      budgetIds.forEach((id) => {
+        const input = document.getElementById(id);
+        if (!input) return;
+        const value = plannerBudget[id];
+        input.value = value === undefined ? '' : normalizeEstimatedCost(value).toString();
       });
-
-      const legacyCounters = {};
-      allTasks.forEach(task => ensureStableTaskId(task, legacyCounters));
-      allTasks.forEach(task => ensureEditableTask(task));
-
-      const sectionStateFallback = {};
-      const consumedStateIds = new Set();
-      Array.from(savedTaskState.values()).forEach(state => {
-        const section = normalizeTaskSection(state.section);
-        (sectionStateFallback[section] ||= []).push(state);
-      });
-
-      const consumeFallbackState = (task) => {
-        const section = normalizeTaskSection(task.dataset.section);
-        const candidates = sectionStateFallback[section] || [];
-        if (!candidates.length) {
-          return null;
-        }
-
-        const title = normalizeTaskText(task.querySelector('.task-title')?.textContent || '');
-        const matchedIndex = candidates.findIndex(state =>
-          !consumedStateIds.has(state.id) && normalizeTaskText(state.title || '') === title
-        );
-        const useIndex = matchedIndex >= 0 ? matchedIndex : 0;
-        const state = candidates.splice(useIndex, 1)[0];
-        if (!state) {
-          return null;
-        }
-        consumedStateIds.add(state.id);
-        return state;
-      };
-
-      if (hasSavedTaskState) {
-        allTasks.forEach(task => {
-          const state = savedTaskState.get(task.dataset.taskId);
-          const fallbackState = state ? null : consumeFallbackState(task);
-          const nextState = state || fallbackState;
-          if (!nextState) return;
-          applyTaskStateToTask(task, nextState);
-        });
-      } else {
-        const savedTasks = Array.isArray(parsedLegacyTasksMeta.value) ? parsedLegacyTasksMeta.value : [];
-        const customById = new Map(Array.isArray(savedCustomTasks) ? savedCustomTasks.map(task => [task.id, task]) : []);
-
-        const taskInputs = getTaskInputs();
-        taskInputs.forEach((input, index) => {
-          input.checked = Boolean(savedTasks[index]);
-        });
-
-        allTasks.forEach(task => {
-          if (task.dataset.customTask !== 'true') {
-            return;
-          }
-          const customState = customById.get(task.dataset.taskId);
-          const checkbox = task.querySelector('[data-task]');
-          if (checkbox && customState) {
-            checkbox.checked = Boolean(customState.done);
-          }
-        });
-
-        allTasks.forEach(task => {
-          task.dataset.section = normalizeTaskSection(task.dataset.section || 'before-move');
-          appendTaskToSection(task, task.dataset.section);
-        });
-      }
-
-      const localPlanner = {
-        moveDate: localStorage.getItem('txMoveMoveDate') || '',
-        notes: localStorage.getItem('txMoveNotes') || '',
-        budget: parsedBudgetMeta.value || {},
-        customTasks: Array.isArray(savedCustomTasks) ? savedCustomTasks : [],
-        tasks: Array.isArray(parsedTaskStateMeta.value) ? parsedTaskStateMeta.value : [],
-        schedule: {
-          selectedDate: localStorage.getItem('txMoveSelectedScheduleDate') || '',
-          calendarCollapsed: localStorage.getItem(CALENDAR_COLLAPSE_KEY) === '1',
-          events: parsedEventsMeta.value || {}
-        }
-      };
-      const hasAnyPlannerTask = (Array.isArray(localPlanner.tasks) && localPlanner.tasks.length > 0)
-        || (Array.isArray(localPlanner.customTasks) && localPlanner.customTasks.length > 0);
-      const hasMeaningfulLocalPlannerState = hasPlannerMeaningfulUserData(localPlanner);
-      const shouldBootstrapDefaultTasks = allowTemplateSeed && !hasAnyPlannerTask && !hasTemplateBootstrapRun && !hasRemotePlannerApplied && !hasMeaningfulLocalPlannerState;
-      if (shouldBootstrapDefaultTasks) {
-        seedDefaultTasks('default-seed');
-      } else if (!hasAnyPlannerTask) {
-        setLastStateMutationSource('loadState', 'template-bootstrap-skipped');
-      }
-
-      const savedBudget = parsedBudgetMeta.value || {};
-      budgetIds.forEach(id => {
-        if (savedBudget[id] !== undefined) {
-          document.getElementById(id).value = savedBudget[id];
-        }
-      });
-
-      const savedTheme = localStorage.getItem('txMoveTheme') || 'light';
-      const savedMoveDate = localStorage.getItem('txMoveMoveDate') || '';
-      const savedScheduleDate = localStorage.getItem('txMoveSelectedScheduleDate');
-      const savedGoogleConnected = localStorage.getItem('txMoveGoogleConnected') === '1';
-      const savedCalendarCollapsed = localStorage.getItem(CALENDAR_COLLAPSE_KEY) === '1';
-      lastSeenStorageRevision = localStorage.getItem(TASK_STORAGE_REVISION_KEY) || lastSeenStorageRevision;
-
-      if (savedScheduleDate && /^\d{4}-\d{2}-\d{2}$/.test(savedScheduleDate)) {
-        selectedScheduleDate = savedScheduleDate;
-        const selectedDate = parseDateKey(savedScheduleDate);
-        if (selectedDate) {
-          scheduleCursorDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+      calendarEvents = plannerEvents;
+      if (plannerSelectedDate) {
+        selectedScheduleDate = plannerSelectedDate;
+        const parsed = parseDateKey(plannerSelectedDate);
+        if (parsed) {
+          scheduleCursorDate = new Date(parsed.getFullYear(), parsed.getMonth(), 1);
         }
       }
-      setCalendarCollapsedState(savedCalendarCollapsed, false);
-
-      calendarEvents = getCalendarEvents();
-      setGoogleConnectedState(false);
-      if (savedGoogleConnected) {
+      setCalendarCollapsedState(Boolean(plannerCollapsed), false);
+      updateBudget('state-render', { persist: false });
+      renderScheduleCalendar();
+      renderScheduleEvents();
+      if (normalizedPlanner.googleConnected === true) {
         setGoogleCalendarStatus('구글 캘린더 연결 기록이 있습니다. 동기화하려면 다시 연결해 주세요.');
         googleConnectBtn.textContent = '구글 캘린더 다시 연결';
         googleDisconnectBtn.hidden = false;
+      } else {
+        setGoogleConnectedState(false);
+      }
+    }
+
+    function loadState(reason = 'loadState') {
+      const before = getStateSnapshotFromDOM('load-before');
+      setLastStateMutationSource('loadState', reason);
+      const storageMeta = getPlannerPayloadFromStorageWithMetadata();
+      const localPlanner = normalizePlannerState(storageMeta.planner || {});
+      const storageTasks = Array.isArray(localPlanner?.tasks) ? localPlanner.tasks : [];
+      const storageTaskCount = storageTasks.length;
+      const storageCheckedCount = storageTasks.filter((task) => Boolean(task && task.done)).length;
+      const hasMeaningfulLocalPlannerState = hasPlannerMeaningfulUserData(localPlanner) || storageTaskCount > 0;
+      const storageSource = storageMeta.taskStateMeta?.source || 'missing';
+      console.log('[Load Restore] storageKeys', storageMeta.keyPresence, {
+        hasAnyStoragePresence: storageMeta.hasAnyStoragePresence,
+        hasMeaningfulLocalPlannerState,
+        taskStateSource: storageSource,
+        parseFailed: storageMeta.parseFailed
+      });
+      console.log('[Load Restore] pre-parse', {
+        storageTaskCount,
+        storageCheckedCount,
+        storageTaskStateRawExists: storageMeta.keyPresence.txMovePlannerState || storageMeta.keyPresence.txMoveTaskState
+      });
+      if (!hasMeaningfulLocalPlannerState) {
+        return false;
       }
 
-      renderScheduleCalendar();
-      renderScheduleEvents();
+      applyPlannerStateAndRenderState(localPlanner, 'hydrate-local');
+      setLastHydrateSource(storageSource === 'legacy-storage' ? 'legacy-local' : 'local');
+      console.log(
+        `[Hydrate] source=${storageSource === 'legacy-storage' ? 'legacy-local' : 'local'} ` +
+        `taskCount=${localPlanner.tasks.length} checkedCount=${localPlanner.tasks.filter(task => task?.done).length}`
+      );
 
-      notes.value = localStorage.getItem('txMoveNotes') || '';
-      applyTheme(savedTheme, false);
-      updateMoveDate(savedMoveDate, false);
-      updateProgress();
-      updateBudget();
+      const loadRenderTaskCount = getAllTaskCards().length;
+      const loadRenderCheckedCount = getAllTaskCards().filter(task => task.querySelector('[data-task]')?.checked).length;
+      console.log(
+        `[Load Restore] storageTaskCount=${storageTaskCount}, storageCheckedCount=${storageCheckedCount}, ` +
+        `renderTaskCount=${loadRenderTaskCount}, renderCheckedCount=${loadRenderCheckedCount}`
+      );
+
+      if (localStorage.getItem(TASK_STORAGE_REVISION_KEY)) {
+        lastSeenStorageRevision = localStorage.getItem(TASK_STORAGE_REVISION_KEY);
+      }
       const after = getStateSnapshotFromDOM('load-after');
       logStateMutation('loadState', reason, 'ui-render', { before, after });
+      return true;
     }
 
     taskList.addEventListener('change', event => {
@@ -5905,25 +6074,20 @@
         console.log('[Planner Sync Trigger] task due-date changed');
         const task = event.target.closest('.task');
         if (!task) return;
-        const section = normalizeTaskSection(task.dataset.section);
+        const taskId = task.dataset.taskId || '';
         const nextDueDate = normalizeDateValue(event.target.value);
         const moveDateKey = getMoveDateKey();
-        task.dataset.dueDate = nextDueDate;
+        let dueOffset = null;
         if (moveDateKey && nextDueDate) {
-          const offset = getDueOffsetFromAbsoluteDate(moveDateKey, nextDueDate);
-          if (offset !== null) {
-            task.dataset.dueOffset = String(offset);
-          } else {
-            task.dataset.dueOffset = '';
-          }
+          dueOffset = getDueOffsetFromAbsoluteDate(moveDateKey, nextDueDate);
         }
-        updateTaskStatusBadge(task);
-        updateTaskDueSummary(task);
-        appendTaskToSection(task, section);
-        sortTasksInSection(section);
-        persistTaskState('user-task-edit');
-        updateProgress();
-        queuePlannerSync('user-task-edit');
+        updateTaskStateInPlanner(taskId, {
+          dueDate: nextDueDate,
+          dueOffset
+        }, {
+          reason: 'user-task-edit',
+          shouldSync: true
+        });
         return;
       }
 
@@ -5931,23 +6095,42 @@
         console.log('[Planner Sync Trigger] task priority changed');
         const task = event.target.closest('.task');
         if (!task) return;
-        setTaskPriority(task, event.target.value);
-        sortAllTaskSections();
-        persistTaskState('user-task-edit');
-        updateProgress();
-        queuePlannerSync('user-task-edit');
+        const taskId = task.dataset.taskId || '';
+        updateTaskStateInPlanner(taskId, {
+          priority: event.target.value
+        }, {
+          reason: 'user-task-edit',
+          shouldSync: true
+        });
         return;
       }
 
       if (event.target.matches('[data-task]')) {
         console.log('[Planner Sync Trigger] task done state changed');
+        const task = event.target.closest('.task');
+        if (!task) return;
+        const taskId = task.dataset.taskId || '';
+        const checked = Boolean(event.target.checked);
         const before = getStateSnapshotFromDOM('task-check-before');
-        persistTaskState('user-check');
-        updateProgress();
+        updateTaskStateInPlanner(taskId, {
+          done: checked
+        }, {
+          reason: 'user-check',
+          shouldSync: true
+        });
         const after = getStateSnapshotFromDOM('task-check-after');
+        const storageTaskState = getStoredTaskStateForDebug();
+        const storageTask = storageTaskState.find((item) => item?.id === taskId);
+        const stateTask = (Array.isArray(plannerState?.tasks) ? plannerState.tasks : []).find((item) => item?.id === taskId);
+        const stateDone = stateTask ? Boolean(stateTask.done) : null;
+        const storageDone = storageTask ? Boolean(storageTask.done) : null;
+        console.log(`[Task Save Check] taskId=${taskId || 'none'}, uiDone=${checked}, stateDone=${stateDone}, storageDone=${storageDone}`);
+        console.log('[Task Save Check] localStorage txMovePlannerState parsed', {
+          taskCount: storageTaskState.length,
+          checkedCount: storageTaskState.filter(task => task?.done).length
+        });
         setLastStateMutationSource('taskCheckToggle', 'user-check');
         logStateMutation('taskCheckToggle', 'checked', 'user', { before, after });
-        queuePlannerSync('user-check');
       }
     });
 
@@ -5956,12 +6139,18 @@
         console.log('[Planner Sync Trigger] task cost changed');
         const task = event.target.closest('.task');
         if (!task) return;
+        const taskId = task.dataset.taskId || '';
         const raw = event.target.value;
         const normalized = raw.trim() === '' ? 0 : normalizeEstimatedCost(raw);
         task.dataset.estimatedCost = normalized;
-        persistTaskState('user-task-edit');
+        updateTaskStateInPlanner(taskId, {
+          estimatedCost: normalized
+        }, {
+          reason: 'user-task-edit',
+          shouldSync: true,
+          render: false
+        });
         updateProgress({ suppressSort: true });
-        queuePlannerSync('user-task-edit');
         return;
       }
 
@@ -5971,14 +6160,22 @@
       console.log('[Planner Sync Trigger] task title/desc edited');
       const task = event.target.closest('.task');
       if (!task) return;
+      const taskId = task.dataset.taskId || '';
       const sanitized = normalizeTaskText(event.target.textContent || '');
       if (sanitized !== event.target.textContent) {
         event.target.textContent = sanitized;
       }
 
-      persistTaskState('user-task-edit');
+      updateTaskStateInPlanner(
+        taskId,
+        event.target.matches('.task-title') ? { title: sanitized } : { desc: sanitized },
+        {
+          reason: 'user-task-edit',
+          shouldSync: true,
+          render: false
+        }
+      );
       updateProgress({ suppressSort: true });
-      queuePlannerSync('user-task-edit');
     });
 
     taskList.addEventListener('blur', event => {
@@ -5991,6 +6188,7 @@
         const raw = event.target.value;
         const task = event.target.closest('.task');
         if (task) {
+          const taskId = task.dataset.taskId || '';
           const wrapper = task.querySelector('.task-cost-wrap');
           if (wrapper) {
             wrapper.classList.remove('editing');
@@ -5998,13 +6196,18 @@
           const normalized = raw.trim() === '' ? 0 : normalizeEstimatedCost(raw);
           task.dataset.estimatedCost = normalized;
           event.target.value = normalized ? normalized.toString() : '';
+          updateTaskStateInPlanner(taskId, {
+            estimatedCost: normalized
+          }, {
+            reason: 'user-task-edit',
+            shouldSync: true,
+            render: false
+          });
           updateTaskCostBadge(task);
         }
       }
 
-      persistTaskState('user-task-edit');
       updateProgress({ suppressSort: true });
-      queuePlannerSync('user-task-edit');
     }, true);
 
     taskList.addEventListener('keydown', event => {
@@ -6032,9 +6235,13 @@
       if (!removeBtn) return;
 
       const before = getStateSnapshotFromDOM('custom-task-delete-before');
-      removeBtn.closest('.task')?.remove();
-      persistTaskState('user-custom-task-delete');
-      updateProgress();
+      const task = removeBtn.closest('.task');
+      const taskId = task?.dataset?.taskId || '';
+      plannerState = normalizePlannerState({
+        ...(plannerState || createEmptyPlannerState()),
+        tasks: (Array.isArray(plannerState?.tasks) ? plannerState.tasks : []).filter(item => item?.id !== taskId)
+      });
+      applyPlannerStateAndRenderState(plannerState, 'user-custom-task-delete');
       queuePlannerSync('user-custom-task-delete');
       const after = getStateSnapshotFromDOM('custom-task-delete-after');
       setLastStateMutationSource('deleteCustomTask', 'user-custom-task-delete');
@@ -6071,15 +6278,19 @@
         const wrapper = clickedTask.querySelector('.task-cost-wrap');
         const costInput = wrapper?.querySelector('.task-cost-input');
         if (wrapper && costInput) {
+          const taskId = clickedTask.dataset.taskId || '';
           const raw = costInput.value;
           const normalized = raw.trim() === '' ? 0 : normalizeEstimatedCost(raw);
           clickedTask.dataset.estimatedCost = normalized;
           costInput.value = normalized ? normalized.toString() : '';
           wrapper.classList.remove('editing');
+          updateTaskStateInPlanner(taskId, {
+            estimatedCost: normalized
+          }, {
+            reason: 'user-task-edit',
+            shouldSync: true
+          });
           updateTaskCostBadge(clickedTask);
-          persistTaskState('user-task-edit');
-          updateProgress({ suppressSort: true });
-          queuePlannerSync('user-task-edit');
         }
         return;
       }
@@ -6128,8 +6339,13 @@
       if (!dayBtn) return;
 
       selectedScheduleDate = dayBtn.dataset.scheduleDate;
-      localStorage.setItem('txMoveSelectedScheduleDate', selectedScheduleDate);
-      notifyStorageSync('selected-schedule-date');
+      persistPlannerStateToStorage({
+        ...(plannerState || createEmptyPlannerState()),
+        schedule: {
+          ...(plannerState?.schedule || {}),
+          selectedDate: selectedScheduleDate
+        }
+      }, 'state-render');
       renderScheduleCalendar();
       renderScheduleEvents();
       scheduleInput.focus();
@@ -6196,7 +6412,7 @@
         return;
       }
 
-      const customTask = createTaskElement({
+      const customTask = normalizePlannerTask({
         title,
         desc,
         priority,
@@ -6205,10 +6421,14 @@
         dueDate,
         dueOffset,
         visitUrl,
-        estimatedCost
+        estimatedCost,
+        done: false
       });
-      appendTaskToSection(customTask, section);
-      sortTasksInSection(section);
+      plannerState = normalizePlannerState({
+        ...(plannerState || createEmptyPlannerState()),
+        tasks: [...(Array.isArray(plannerState?.tasks) ? plannerState.tasks : []), customTask]
+      });
+      applyPlannerStateAndRenderState(plannerState, 'user-custom-task-add');
 
       customTaskTitle.value = '';
       customTaskDesc.value = '';
@@ -6217,9 +6437,7 @@
       customTaskCost.value = '';
       customTaskUrl.value = '';
 
-      persistTaskState('user-custom-task-add');
       queuePlannerSync('user-custom-task-add');
-      updateProgress();
       customTaskTitle.focus();
       const after = getStateSnapshotFromDOM('custom-task-add-after');
       setLastStateMutationSource('addCustomTask', 'user');
@@ -6248,8 +6466,11 @@
     notes.addEventListener('input', () => {
       const before = getStateSnapshotFromDOM('notes-before');
       console.log('[Planner Sync Trigger] notes changed');
-      localStorage.setItem('txMoveNotes', notes.value);
-      notifyStorageSync('notes');
+      plannerState = normalizePlannerState({
+        ...(plannerState || createEmptyPlannerState()),
+        notes: notes.value || ''
+      });
+      persistPlannerStateFromInputs('user-note');
       queuePlannerSync('user-note');
       const after = getStateSnapshotFromDOM('notes-after');
       setLastStateMutationSource('notes', 'input');
@@ -6278,8 +6499,13 @@
       }
       console.log('[Planner Sync] initial load start', { startedAt: initStartAt });
       try {
-        await loadPlannerDataFromServer(true);
-        loadState('initial-load');
+        const remoteLoadResult = await loadPlannerDataFromServer(true);
+        if (!remoteLoadResult || !remoteLoadResult.applied) {
+          const loadedLocal = loadState('initial-load');
+          if (!loadedLocal) {
+            seedDefaultTasks('default-seed');
+          }
+        }
       } finally {
         isHydratingInitialState = false;
         hasCompletedInitialLoad = true;
@@ -6295,38 +6521,24 @@
     }
 
     resetBtn.addEventListener('click', () => {
-      const taskInputs = getTaskInputs();
-      taskInputs.forEach(input => {
-        input.checked = false;
+      plannerState = normalizePlannerState({
+        ...(plannerState || createEmptyPlannerState()),
+        tasks: (Array.isArray(plannerState?.tasks) ? plannerState.tasks : []).map(task => ({
+          ...task,
+          done: false
+        }))
       });
-      persistTaskState('user-task-edit');
-      updateProgress();
+      applyPlannerStateAndRenderState(plannerState, 'user-task-edit');
       queuePlannerSync('user-task-edit');
-    });
-
-    window.addEventListener('pagehide', () => {
-      persistTaskState();
-      localStorage.setItem('txMoveNotes', notes.value);
-      notifyStorageSync('pagehide-notes');
     });
 
     window.addEventListener('visibilitychange', () => {
       if (!document.hidden) {
-        if (!localSyncInProgress) {
-          loadPlannerDataFromServer();
-        }
         scheduleStorageRefresh();
-      } else {
-        persistTaskState();
-        localStorage.setItem('txMoveNotes', notes.value);
-        notifyStorageSync('notes');
       }
     });
 
     window.addEventListener('focus', () => {
-      if (!localSyncInProgress) {
-        loadPlannerDataFromServer();
-      }
       scheduleStorageRefresh();
     });
 
@@ -6341,21 +6553,15 @@
     });
 
     if (taskSyncChannel) {
-      taskSyncChannel.addEventListener('message', event => {
-        const data = event?.data || {};
-        if (data.source === taskSyncId) return;
-        if (data.type !== 'state-sync') return;
-        if (data.revision) {
-          lastSeenStorageRevision = data.revision;
-        }
-        scheduleStorageRefresh();
-      });
+      taskSyncChannel.addEventListener('message', () => {});
     }
 
     startStoragePoll();
     startPlannerSyncPoll();
     initializePlannerState().catch(() => {
-      loadState();
+      if (!loadState('hydrate-local-fallback')) {
+        seedDefaultTasks('default-seed');
+      }
     });
   </script>
 </body>
