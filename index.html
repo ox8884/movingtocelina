@@ -4584,7 +4584,16 @@
     }
 
     function startPlannerSyncPoll() {
-      return;
+      if (plannerPollTimer) return;
+      plannerPollTimer = window.setInterval(() => {
+        if (!hasCompletedInitialLoad || isHydratingInitialState || isApplyingRemoteState) {
+          return;
+        }
+        if (hasPendingLocalChanges()) {
+          return;
+        }
+        loadPlannerDataFromServer(false);
+      }, PLANNER_SYNC_INTERVAL_MS);
     }
 
     function isEditingTaskInline() {
