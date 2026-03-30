@@ -3,6 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#c65d2e" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Move Prep" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="application-name" content="Move Prep Dashboard" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
   <title>Move Prep Dashboard</title>
   <style>
     :root {
@@ -552,6 +560,24 @@
       color: #fff8f2;
       font-size: 0.98rem;
       letter-spacing: -0.02em;
+    }
+
+    .sync-status-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .sync-status-actions[hidden] {
+      display: none;
+    }
+
+    .install-status-text {
+      display: block;
+      margin-top: 8px;
+      color: rgba(255, 241, 228, 0.72);
+      line-height: 1.5;
     }
 
     .today-focus-card {
@@ -2409,6 +2435,10 @@
             <span>마지막 동기화</span>
             <strong id="plannerSyncRelativeTime">아직 없음</strong>
           </div>
+          <div class="sync-status-actions" id="installAppActions" hidden>
+            <button type="button" class="server-sync-button" id="installAppBtn">앱 설치</button>
+          </div>
+          <small class="install-status-text" id="installAppStatus">Android에서 홈 화면에 추가하면 앱처럼 열 수 있습니다.</small>
         </div>
         <div class="hero-meta-grid">
           <div class="hero-meta-card">
@@ -3162,6 +3192,9 @@
     const scheduleList = document.getElementById('scheduleList');
     const notes = document.getElementById('notes');
     const plannerSyncStatus = document.getElementById('plannerSyncStatus');
+    const installAppActions = document.getElementById('installAppActions');
+    const installAppBtn = document.getElementById('installAppBtn');
+    const installAppStatus = document.getElementById('installAppStatus');
     const moveDateInput = document.getElementById('moveDateInput');
     const moveDateDisplay = document.getElementById('moveDateDisplay');
     const dDayDisplay = document.getElementById('dDayDisplay');
@@ -3326,6 +3359,7 @@
     let plannerSyncStatusState = 'idle';
     let plannerSyncStatusHideTimer = null;
     let plannerSyncRelativeTimer = null;
+    let deferredInstallPrompt = null;
     const costFormatter = new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
@@ -4473,6 +4507,41 @@
 
     function requestServerSync(source = 'user-manual-save') {
       return loadPlannerDataFromServer(true);
+    }
+
+    // --- PWA install helpers ---
+    function isStandaloneDisplayMode() {
+      return window.matchMedia('(display-mode: standalone)').matches
+        || window.navigator.standalone === true;
+    }
+
+    function updateInstallPromptUI(message = '', options = {}) {
+      if (!installAppStatus) return;
+      const {
+        showButton = false,
+        buttonDisabled = false,
+        buttonLabel = '앱 설치'
+      } = options;
+
+      if (installAppActions) {
+        installAppActions.hidden = !showButton;
+      }
+
+      if (installAppBtn) {
+        installAppBtn.disabled = Boolean(buttonDisabled);
+        installAppBtn.textContent = buttonLabel;
+      }
+
+      installAppStatus.textContent = message || 'Android에서 홈 화면에 추가하면 앱처럼 열 수 있습니다.';
+    }
+
+    async function registerServiceWorker() {
+      if (!('serviceWorker' in navigator)) return;
+      try {
+        await navigator.serviceWorker.register('./service-worker.js');
+      } catch (error) {
+        console.error('[PWA] service worker registration failed', error);
+      }
     }
 
     function buildPlannerPayloadSummary(payload = {}) {
@@ -7291,6 +7360,43 @@
       }
     });
 
+    if (installAppBtn) {
+      installAppBtn.addEventListener('click', async () => {
+        if (!deferredInstallPrompt) return;
+        installAppBtn.disabled = true;
+        installAppBtn.textContent = '설치 요청 중...';
+        deferredInstallPrompt.prompt();
+        const choiceResult = await deferredInstallPrompt.userChoice;
+        if (choiceResult?.outcome === 'accepted') {
+          updateInstallPromptUI('설치를 시작했습니다. 홈 화면에 추가되면 앱처럼 실행됩니다.', {
+            showButton: false
+          });
+        } else {
+          updateInstallPromptUI('설치를 취소했습니다. 필요하면 다시 설치 버튼을 눌러주세요.', {
+            showButton: true,
+            buttonDisabled: false
+          });
+        }
+        deferredInstallPrompt = null;
+      });
+    }
+
+    window.addEventListener('beforeinstallprompt', (event) => {
+      event.preventDefault();
+      deferredInstallPrompt = event;
+      updateInstallPromptUI('앱처럼 설치할 수 있습니다. Android Chrome에서 설치 버튼을 눌러주세요.', {
+        showButton: true,
+        buttonDisabled: false
+      });
+    });
+
+    window.addEventListener('appinstalled', () => {
+      deferredInstallPrompt = null;
+      updateInstallPromptUI('설치 완료. 홈 화면에서 앱처럼 바로 열 수 있습니다.', {
+        showButton: false
+      });
+    });
+
     async function initializePlannerState() {
       const initStartAt = Date.now();
       const before = getStateSnapshotFromDOM('init-before');
@@ -7339,6 +7445,12 @@
     syncPlannerViewControls();
     applyPlannerSyncInlineState('idle');
     refreshPlannerSyncRelativeTime();
+    if (isStandaloneDisplayMode()) {
+      updateInstallPromptUI('앱으로 실행 중입니다.', { showButton: false });
+    } else {
+      updateInstallPromptUI('Android에서 홈 화면에 추가하면 앱처럼 열 수 있습니다.', { showButton: false });
+    }
+    registerServiceWorker();
     if (!plannerSyncRelativeTimer) {
       plannerSyncRelativeTimer = window.setInterval(refreshPlannerSyncRelativeTime, 1000);
     }
