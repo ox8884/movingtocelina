@@ -452,6 +452,108 @@
       color: rgba(255, 241, 228, 0.62);
     }
 
+    .sync-status-card {
+      margin-top: 12px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      display: grid;
+      gap: 12px;
+    }
+
+    .sync-status-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .sync-status-copy {
+      min-width: 0;
+      display: grid;
+      gap: 6px;
+    }
+
+    .sync-status-copy span {
+      font-size: 12px;
+      color: rgba(255, 241, 228, 0.72);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 800;
+    }
+
+    .sync-status-main {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .sync-status-main strong {
+      font-size: 1.08rem;
+      line-height: 1.15;
+      letter-spacing: -0.03em;
+      color: #fff8f2;
+    }
+
+    .sync-status-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 28px;
+      padding: 0 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+      border: 1px solid rgba(255, 241, 228, 0.2);
+      background: rgba(255, 248, 242, 0.08);
+      color: #fff8f2;
+      transition: opacity 0.22s ease, transform 0.22s ease, background 0.22s ease, border-color 0.22s ease;
+    }
+
+    .sync-status-pill.saving {
+      background: rgba(255, 207, 180, 0.14);
+      border-color: rgba(255, 207, 180, 0.32);
+      color: #ffe6d8;
+    }
+
+    .sync-status-pill.saved {
+      background: rgba(162, 214, 179, 0.16);
+      border-color: rgba(162, 214, 179, 0.34);
+      color: #e6fff0;
+    }
+
+    .sync-status-pill.error {
+      background: rgba(255, 143, 143, 0.16);
+      border-color: rgba(255, 143, 143, 0.32);
+      color: #ffe6e6;
+    }
+
+    .sync-status-detail {
+      font-size: 12px;
+      color: rgba(255, 241, 228, 0.64);
+      min-height: 18px;
+    }
+
+    .sync-status-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: rgba(255, 241, 228, 0.72);
+    }
+
+    .sync-status-meta strong {
+      color: #fff8f2;
+      font-size: 0.98rem;
+      letter-spacing: -0.02em;
+    }
+
     .summary-grid,
     .content-grid,
     .budget-grid {
@@ -2051,6 +2153,23 @@
             <strong id="dDayDisplay">D-day 미설정</strong>
           </div>
         </label>
+        <div class="sync-status-card">
+          <div class="sync-status-header">
+            <div class="sync-status-copy">
+              <span>동기화 상태</span>
+              <div class="sync-status-main">
+                <strong id="plannerSyncInlineStatus">대기 중</strong>
+                <span class="sync-status-pill" id="plannerSyncInlineBadge">대기</span>
+              </div>
+              <small class="sync-status-detail" id="plannerSyncInlineDetail">변경 사항을 서버와 동기화합니다.</small>
+            </div>
+            <button type="button" class="server-sync-button" data-planner-sync-refresh>지금 동기화</button>
+          </div>
+          <div class="sync-status-meta">
+            <span>마지막 동기화</span>
+            <strong id="plannerSyncRelativeTime">아직 없음</strong>
+          </div>
+        </div>
         <div class="hero-meta-grid">
           <div class="hero-meta-card">
             <span>다음 포커스</span>
@@ -2079,7 +2198,7 @@
             <span class="summary-badge" id="serverSyncStatus">대기 중</span>
           </div>
           <div class="server-sync-actions">
-            <button type="button" class="server-sync-button" id="serverSyncRefreshBtn">지금 동기화</button>
+            <button type="button" class="server-sync-button" data-planner-sync-refresh>지금 동기화</button>
           </div>
           <div class="server-sync-grid">
             <div class="row">
@@ -2797,7 +2916,11 @@
     const plannerTaskSummaryEl = document.getElementById('plannerTaskSummary');
     const lastRenderTaskSummaryEl = document.getElementById('lastRenderTaskSummary');
     const serverSyncNotes = document.getElementById('serverSyncNotes');
-    const serverSyncRefreshBtn = document.getElementById('serverSyncRefreshBtn');
+    const plannerSyncInlineStatus = document.getElementById('plannerSyncInlineStatus');
+    const plannerSyncInlineBadge = document.getElementById('plannerSyncInlineBadge');
+    const plannerSyncInlineDetail = document.getElementById('plannerSyncInlineDetail');
+    const plannerSyncRelativeTime = document.getElementById('plannerSyncRelativeTime');
+    const plannerSyncRefreshButtons = [...document.querySelectorAll('[data-planner-sync-refresh]')];
     const lastStateMutationSourceEl = document.getElementById('lastStateMutationSource');
     const lastAllowedPostSourceEl = document.getElementById('lastAllowedPostSource');
     const lastAllowedPostReasonEl = document.getElementById('lastAllowedPostReason');
@@ -2920,6 +3043,9 @@
     let lastServerLoadAt = 0;
     let lastRenderedPlannerTaskCount = 0;
     let lastRenderedDomTaskCount = 0;
+    let plannerSyncStatusState = 'idle';
+    let plannerSyncStatusHideTimer = null;
+    let plannerSyncRelativeTimer = null;
     const costFormatter = new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
@@ -3262,10 +3388,82 @@
       googleCalendarStatus.style.color = isError ? 'var(--danger)' : '';
     }
 
-    function setPlannerSyncStatus(message, isError = false) {
+    function formatRelativeTime(timestamp) {
+      const value = Number(timestamp) || 0;
+      if (!value) return '아직 없음';
+      const diffSeconds = Math.max(0, Math.floor((Date.now() - value) / 1000));
+      if (diffSeconds < 2) return '방금 전';
+      if (diffSeconds < 60) return `${diffSeconds}초 전`;
+      const diffMinutes = Math.floor(diffSeconds / 60);
+      if (diffMinutes < 60) return `${diffMinutes}분 전`;
+      const diffHours = Math.floor(diffMinutes / 60);
+      if (diffHours < 24) return `${diffHours}시간 전`;
+      const diffDays = Math.floor(diffHours / 24);
+      return `${diffDays}일 전`;
+    }
+
+    function getLastSuccessfulPlannerSyncAt() {
+      return Math.max(Number(lastServerSaveAt) || 0, Number(lastServerLoadAt) || 0);
+    }
+
+    function refreshPlannerSyncRelativeTime() {
+      if (!plannerSyncRelativeTime) return;
+      plannerSyncRelativeTime.textContent = formatRelativeTime(getLastSuccessfulPlannerSyncAt());
+    }
+
+    function applyPlannerSyncInlineState(state = 'idle', detailMessage = '') {
+      plannerSyncStatusState = state;
+      const stateLabelMap = {
+        idle: '대기',
+        saving: '저장 중',
+        saved: '저장됨 ✔',
+        error: '저장 실패 ❌'
+      };
+      const detailLabelMap = {
+        idle: '변경 사항을 서버와 동기화합니다.',
+        saving: '변경 사항을 서버에 저장하고 있습니다.',
+        saved: '최근 변경 사항이 서버에 반영되었습니다.',
+        error: '저장에 실패했습니다. 다시 시도해 주세요.'
+      };
+      if (plannerSyncInlineStatus) {
+        plannerSyncInlineStatus.textContent = stateLabelMap[state] || stateLabelMap.idle;
+      }
+      if (plannerSyncInlineBadge) {
+        plannerSyncInlineBadge.textContent = stateLabelMap[state] || stateLabelMap.idle;
+        plannerSyncInlineBadge.className = `sync-status-pill${state === 'idle' ? '' : ` ${state}`}`;
+      }
+      if (plannerSyncInlineDetail) {
+        plannerSyncInlineDetail.textContent = detailMessage || detailLabelMap[state] || detailLabelMap.idle;
+      }
+      refreshPlannerSyncRelativeTime();
+    }
+
+    function setPlannerSyncStatus(message, isError = false, options = {}) {
       if (!plannerSyncStatus) return;
-      plannerSyncStatus.textContent = message || '';
+      const normalizedMessage = message || '';
+      const nextState = options.state || (
+        isError
+          ? 'error'
+          : normalizedMessage.includes('중')
+            ? 'saving'
+            : normalizedMessage
+              ? 'saved'
+              : 'idle'
+      );
+      if (plannerSyncStatusHideTimer) {
+        clearTimeout(plannerSyncStatusHideTimer);
+        plannerSyncStatusHideTimer = null;
+      }
+      plannerSyncStatus.textContent = normalizedMessage || (nextState === 'idle' ? '대기 중' : '');
       plannerSyncStatus.style.color = isError ? 'var(--danger)' : '';
+      applyPlannerSyncInlineState(nextState, options.detail || normalizedMessage);
+      if (options.transient) {
+        plannerSyncStatusHideTimer = window.setTimeout(() => {
+          plannerSyncStatus.textContent = '대기 중';
+          plannerSyncStatus.style.color = '';
+          applyPlannerSyncInlineState('idle');
+        }, 1800);
+      }
     }
 
     function updateGoogleButtons() {
@@ -3856,7 +4054,7 @@
 
       localLastModifiedAt = Date.now();
       localSyncInProgress = true;
-      setPlannerSyncStatus('동기화 진행 중', false);
+      setPlannerSyncStatus('저장 중...', false, { state: 'saving', detail: '변경 사항을 서버에 저장하고 있습니다.' });
       plannerSyncReason = effectiveReason;
       setLastStateMutationSource('queuePlannerSync', 'local-change-queue');
       updateServerSyncCard(plannerState || getPlannerPayloadFromStorage(), '', '동기화 진행 중');
@@ -3927,7 +4125,7 @@
         const noteSummary = notesText.trim().length > 0 ? `있음 (${notesText.length}자)` : '없음';
         serverSyncNotes.textContent = noteSummary;
       }
-
+      refreshPlannerSyncRelativeTime();
     }
 
     function parseJsonValue(value, fallback) {
@@ -4347,7 +4545,7 @@
           reason: 'empty-default',
           guardSummary
         });
-        setPlannerSyncStatus('초기/기본 상태는 서버에 저장하지 않습니다.', false);
+        setPlannerSyncStatus('대기 중', false, { state: 'idle', detail: '기본 상태는 서버에 저장하지 않습니다.' });
         updateServerSyncCard(planner, payload.updatedAt, '대기 중');
         localSyncInProgress = false;
         localLastModifiedAt = 0;
@@ -4405,7 +4603,7 @@
           });
           setLastStateMutationSource('persistPlannerDataToServer', 'post-failed');
           logStateMutation('persistPlannerDataToServer', 'post-failed', 'error', { before, after: before });
-          setPlannerSyncStatus(`서버 저장 실패: HTTP ${res.status}`, true);
+        setPlannerSyncStatus(`저장 실패 ❌`, true, { state: 'error', detail: `서버 저장 실패: HTTP ${res.status}` });
           updateServerSyncCard({}, '', '마지막 저장 실패');
           localSyncInProgress = false;
           localLastModifiedAt = 0;
@@ -4447,12 +4645,12 @@
           updatedAt: remoteRevision || payload.updatedAt,
           localLastModifiedAt
         });
-        setPlannerSyncStatus('');
+        setPlannerSyncStatus('저장됨 ✔', false, { state: 'saved', detail: '최근 변경 사항이 서버에 반영되었습니다.', transient: true });
       } catch (error) {
         console.error('[Planner Sync] POST /data exception', error);
         setLastStateMutationSource('persistPlannerDataToServer', 'exception');
         logStateMutation('persistPlannerDataToServer', 'exception', 'error', { before, after: before });
-        setPlannerSyncStatus(`서버 저장 실패: ${error.message || '네트워크 오류'}`, true);
+        setPlannerSyncStatus('저장 실패 ❌', true, { state: 'error', detail: `서버 저장 실패: ${error.message || '네트워크 오류'}` });
         updateServerSyncCard({}, '', '마지막 저장 실패');
         localSyncInProgress = false;
         localLastModifiedAt = 0;
@@ -4575,7 +4773,7 @@
         }
         updateServerSyncCard(appliedPlanner, lastRemoteAppliedAt, '마지막 불러오기 성공');
         updatePlannerDebugSummary();
-        setPlannerSyncStatus('서버 데이터 반영됨');
+        setPlannerSyncStatus('동기화됨 ✔', false, { state: 'saved', detail: '서버 최신 상태를 불러왔습니다.', transient: true });
         return {
           applied: true,
           reason: force ? 'manual-sync' : 'hydrate-server',
@@ -4589,7 +4787,7 @@
           before: beforeApply,
           after: beforeApply
         });
-        setPlannerSyncStatus(`데이터 불러오기 실패: ${error.message || '네트워크 오류'}`, true);
+        setPlannerSyncStatus('저장 실패 ❌', true, { state: 'error', detail: `데이터 불러오기 실패: ${error.message || '네트워크 오류'}` });
         updateServerSyncCard({}, '', '마지막 불러오기 실패');
         return { applied: false, reason: 'exception', error: error.message || 'unknown-error' };
       } finally {
@@ -6523,17 +6721,21 @@
       logStateMutation('notesInput', 'notes', 'user', { before, after });
     });
 
-    if (serverSyncRefreshBtn) {
-      serverSyncRefreshBtn.addEventListener('click', async () => {
-        serverSyncRefreshBtn.disabled = true;
-        setPlannerSyncStatus('서버 다시 불러오는 중...', false);
+    plannerSyncRefreshButtons.forEach((button) => {
+      button.addEventListener('click', async () => {
+        plannerSyncRefreshButtons.forEach((item) => {
+          item.disabled = true;
+        });
+        setPlannerSyncStatus('동기화 중...', false, { state: 'saving', detail: '서버 최신 상태를 다시 불러오고 있습니다.' });
         try {
           await requestServerSync('user-manual-refresh');
         } finally {
-          serverSyncRefreshBtn.disabled = false;
+          plannerSyncRefreshButtons.forEach((item) => {
+            item.disabled = false;
+          });
         }
       });
-    }
+    });
 
     exportBtn.addEventListener('click', async () => {
       try {
@@ -6616,6 +6818,11 @@
 
     startStoragePoll();
     startPlannerSyncPoll();
+    applyPlannerSyncInlineState('idle');
+    refreshPlannerSyncRelativeTime();
+    if (!plannerSyncRelativeTimer) {
+      plannerSyncRelativeTimer = window.setInterval(refreshPlannerSyncRelativeTime, 1000);
+    }
     initializePlannerState().catch(() => {
       if (!loadState('hydrate-local-fallback')) {
         seedDefaultTasks('default-seed');
