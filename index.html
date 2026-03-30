@@ -2119,19 +2119,19 @@
               <strong id="serverSyncNotes">없음</strong>
             </div>
             <div class="row">
-              <span>마지막 상태 변경</span>
+              <span>최근 상태 변경</span>
               <strong id="lastStateMutationSource">-</strong>
             </div>
             <div class="row">
-              <span>마지막 POST 허용 함수</span>
+              <span>최근 로컬 저장</span>
               <strong id="lastAllowedPostSource">-</strong>
             </div>
             <div class="row">
-              <span>마지막 POST 허용 reason</span>
+              <span>최근 불러오기 출처</span>
               <strong id="lastAllowedPostReason">-</strong>
             </div>
             <div class="row">
-              <span>마지막 POST payload</span>
+              <span>현재 task / 완료</span>
               <strong id="lastAllowedPostPayload">-</strong>
             </div>
           </div>
@@ -3568,14 +3568,14 @@
     function setLastStorageSaveSource(source = 'none') {
       lastStorageSaveSource = String(source || 'none');
       if (lastAllowedPostSourceEl) {
-        lastAllowedPostSourceEl.textContent = lastStorageSaveSource;
+        lastAllowedPostSourceEl.textContent = lastStorageSaveSource === 'none' ? '없음' : lastStorageSaveSource;
       }
     }
 
     function setLastHydrateSource(source = 'none') {
       lastHydrateSource = String(source || 'none');
       if (lastAllowedPostReasonEl) {
-        lastAllowedPostReasonEl.textContent = lastHydrateSource;
+        lastAllowedPostReasonEl.textContent = lastHydrateSource === 'none' ? '없음' : lastHydrateSource;
       }
     }
 
@@ -3665,7 +3665,11 @@
       lastStateMutationSource = String(functionName || 'none');
       lastStateMutationReason = normalizeSyncReason(reason || pendingStateMutationReason);
       if (lastStateMutationSourceEl) {
-        lastStateMutationSourceEl.textContent = `마지막 상태 변경: ${lastStateMutationSource} (${lastStateMutationReason})`;
+        if (lastStateMutationSource === 'none') {
+          lastStateMutationSourceEl.textContent = '없음';
+        } else {
+          lastStateMutationSourceEl.textContent = `${lastStateMutationSource} (${lastStateMutationReason})`;
+        }
       }
       console.log('[Planner Mutation] source', {
         functionName,
