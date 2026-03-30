@@ -4515,6 +4515,10 @@
         || window.navigator.standalone === true;
     }
 
+    function isAndroidLikeDevice() {
+      return /Android/i.test(window.navigator.userAgent || '');
+    }
+
     function updateInstallPromptUI(message = '', options = {}) {
       if (!installAppStatus) return;
       const {
@@ -7362,7 +7366,14 @@
 
     if (installAppBtn) {
       installAppBtn.addEventListener('click', async () => {
-        if (!deferredInstallPrompt) return;
+        if (!deferredInstallPrompt) {
+          updateInstallPromptUI('Chrome 메뉴(⋮)에서 "홈 화면에 추가"를 누르면 앱처럼 설치할 수 있습니다.', {
+            showButton: isAndroidLikeDevice() && !isStandaloneDisplayMode(),
+            buttonDisabled: false,
+            buttonLabel: '설치 안내'
+          });
+          return;
+        }
         installAppBtn.disabled = true;
         installAppBtn.textContent = '설치 요청 중...';
         deferredInstallPrompt.prompt();
@@ -7447,6 +7458,12 @@
     refreshPlannerSyncRelativeTime();
     if (isStandaloneDisplayMode()) {
       updateInstallPromptUI('앱으로 실행 중입니다.', { showButton: false });
+    } else if (isAndroidLikeDevice()) {
+      updateInstallPromptUI('Android Chrome에서는 설치 버튼 또는 Chrome 메뉴의 "홈 화면에 추가"로 앱처럼 설치할 수 있습니다.', {
+        showButton: true,
+        buttonDisabled: false,
+        buttonLabel: '앱 설치'
+      });
     } else {
       updateInstallPromptUI('Android에서 홈 화면에 추가하면 앱처럼 열 수 있습니다.', { showButton: false });
     }
