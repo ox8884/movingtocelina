@@ -623,6 +623,64 @@
       align-content: start;
     }
 
+    .task-filter-bar {
+      margin-top: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .task-filter-pills {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .task-filter-button {
+      appearance: none;
+      border: 1px solid rgba(175, 104, 73, 0.18);
+      background: rgba(255, 248, 242, 0.8);
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+    }
+
+    .task-filter-button.active {
+      background: linear-gradient(135deg, rgba(214, 102, 52, 0.92), rgba(186, 84, 40, 0.92));
+      border-color: rgba(186, 84, 40, 0.34);
+      color: #fff8f2;
+      transform: translateY(-1px);
+    }
+
+    .task-sort-control {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: rgba(95, 57, 38, 0.86);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .task-sort-control select {
+      min-height: 38px;
+      padding: 0 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(175, 104, 73, 0.18);
+      background: rgba(255, 248, 242, 0.82);
+      color: var(--ink);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
     .server-sync-card {
       margin-top: 12px;
       padding: 14px;
@@ -2328,6 +2386,22 @@
           </div>
         </div>
 
+        <div class="task-filter-bar">
+          <div class="task-filter-pills">
+            <button type="button" class="task-filter-button active" data-task-filter="all">전체</button>
+            <button type="button" class="task-filter-button" data-task-filter="done">완료된 항목</button>
+            <button type="button" class="task-filter-button" data-task-filter="pending">미완료 항목</button>
+            <button type="button" class="task-filter-button" data-task-filter="high">중요</button>
+          </div>
+          <label class="task-sort-control">
+            <span>정렬</span>
+            <select id="taskSortSelect">
+              <option value="latest">최신 순</option>
+              <option value="due-date">마감일 순</option>
+            </select>
+          </label>
+        </div>
+
         <div class="task-board" id="taskList">
           <section class="task-group">
             <div class="task-group-head">
@@ -2912,6 +2986,8 @@
     const movingWeekProgress = document.getElementById('movingWeekProgress');
     const afterMoveProgressText = document.getElementById('afterMoveProgressText');
     const afterMoveProgress = document.getElementById('afterMoveProgress');
+    const taskFilterButtons = [...document.querySelectorAll('[data-task-filter]')];
+    const taskSortSelect = document.getElementById('taskSortSelect');
     const serverSyncStatus = document.getElementById('serverSyncStatus');
     const serverSyncLastSyncAt = document.getElementById('serverSyncLastSyncAt');
     const lastServerSaveAtEl = document.getElementById('lastServerSaveAt');
@@ -2995,6 +3071,7 @@
     const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/calendar';
     const TASK_SOON_DAYS = 7;
     const PLANNER_STATE_STORAGE_KEY = 'txMovePlannerState';
+    const PLANNER_VIEW_STORAGE_KEY = 'txMovePlannerView';
     const TASK_STORAGE_KEYS = [
       PLANNER_STATE_STORAGE_KEY,
       'txMoveLocalUpdatedAt'
@@ -3031,6 +3108,10 @@
     let plannerPollTimer = null;
     let isApplyingRemoteState = false;
     let storagePollTimer = null;
+    let plannerViewState = {
+      filter: 'all',
+      sort: 'latest'
+    };
     let plannerState = {
       moveDate: '',
       tasks: [],
@@ -3179,6 +3260,62 @@
         events: rawEvents
       };
       return normalized;
+    }
+
+    function normalizePlannerViewState(raw = {}) {
+      const next = raw && typeof raw === 'object' ? raw : {};
+      const filter = ['all', 'done', 'pending', 'high'].includes(next.filter) ? next.filter : 'all';
+      const sort = ['latest', 'due-date'].includes(next.sort) ? next.sort : 'latest';
+      return { filter, sort };
+    }
+
+    function loadPlannerViewState() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(PLANNER_VIEW_STORAGE_KEY) || '{}');
+        plannerViewState = normalizePlannerViewState(parsed);
+      } catch {
+        plannerViewState = normalizePlannerViewState();
+      }
+      return plannerViewState;
+    }
+
+    function persistPlannerViewState() {
+      localStorage.setItem(PLANNER_VIEW_STORAGE_KEY, JSON.stringify(plannerViewState));
+    }
+
+    function syncPlannerViewControls() {
+      taskFilterButtons.forEach((button) => {
+        const isActive = button.dataset.taskFilter === plannerViewState.filter;
+        button.classList.toggle('active', isActive);
+        button.setAttribute('aria-pressed', String(isActive));
+      });
+      if (taskSortSelect) {
+        taskSortSelect.value = plannerViewState.sort;
+      }
+    }
+
+    function getPlannerTasksForCurrentView(tasks = []) {
+      const normalizedTasks = Array.isArray(tasks) ? tasks.slice() : [];
+      const filteredTasks = normalizedTasks.filter((task) => {
+        if (!task || typeof task !== 'object') return false;
+        if (plannerViewState.filter === 'done') return Boolean(task.done);
+        if (plannerViewState.filter === 'pending') return !task.done;
+        if (plannerViewState.filter === 'high') return task.priority === 'high';
+        return true;
+      });
+
+      if (plannerViewState.sort === 'due-date') {
+        return filteredTasks.sort((a, b) => {
+          const aDue = normalizeDateValue(a?.dueDate || '');
+          const bDue = normalizeDateValue(b?.dueDate || '');
+          if (aDue && bDue && aDue !== bDue) return aDue.localeCompare(bDue);
+          if (aDue && !bDue) return -1;
+          if (!aDue && bDue) return 1;
+          return String(a?.id || '').localeCompare(String(b?.id || ''));
+        });
+      }
+
+      return filteredTasks.reverse();
     }
 
     function getPlannerTasksForRender(state = {}) {
@@ -4937,12 +5074,13 @@
       weekEnd.setHours(23, 59, 59, 999);
 
       return tasks.reduce((count, task) => {
-        const checkbox = task.querySelector('[data-task]');
-        if (checkbox?.checked) {
+        const isDomTask = typeof task?.querySelector === 'function';
+        const isDone = isDomTask ? Boolean(task.querySelector('[data-task]')?.checked) : Boolean(task?.done);
+        if (isDone) {
           return count;
         }
 
-        const dueDate = getTaskDueDateString(task);
+        const dueDate = isDomTask ? getTaskDueDateString(task) : normalizeDateValue(task?.dueDate || '');
         if (!dueDate) return count;
 
         const [year, month, day] = dueDate.split('-').map(Number);
@@ -5252,7 +5390,19 @@
       if (!container) return;
 
       const tasks = [...container.querySelectorAll('.task')].filter(node => taskList.contains(node));
-      const sorted = tasks.slice().sort(compareTaskOrder);
+      const sorted = tasks.slice().sort((a, b) => {
+        if (plannerViewState.sort === 'due-date') {
+          const aDue = normalizeDateValue(a.dataset.dueDate || '');
+          const bDue = normalizeDateValue(b.dataset.dueDate || '');
+          if (aDue && bDue && aDue !== bDue) return aDue.localeCompare(bDue);
+          if (aDue && !bDue) return -1;
+          if (!aDue && bDue) return 1;
+        }
+        const aOrder = Number(a.dataset.renderOrder || 0);
+        const bOrder = Number(b.dataset.renderOrder || 0);
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return compareTaskOrder(a, b);
+      });
       sorted.forEach(task => {
         container.appendChild(task);
       });
@@ -5980,45 +6130,40 @@
         sortAllTaskSections();
       }
 
-      const tasks = getAllTaskCards();
-      const taskInputs = tasks
-        .map(task => task.querySelector('[data-task]'))
-        .filter(Boolean);
-      const done = taskInputs.filter(input => input.checked).length;
-      const total = taskInputs.length;
+      const visibleTasks = getAllTaskCards();
+      const sourceTasks = Array.isArray(plannerState?.tasks) ? plannerState.tasks : [];
+      const done = sourceTasks.filter(task => task?.done).length;
+      const total = sourceTasks.length;
       const remaining = Math.max(total - done, 0);
       const percent = total ? Math.round((done / total) * 100) : 0;
-      const totalCost = tasks.reduce((sum, task) => sum + getTaskEstimatedCost(task), 0);
-      const doneCost = tasks.reduce((sum, task) => {
-        if (task.querySelector('[data-task]')?.checked) {
-          return sum + getTaskEstimatedCost(task);
-        }
-        return sum;
+      const totalCost = sourceTasks.reduce((sum, task) => sum + normalizeEstimatedCost(task?.estimatedCost || 0), 0);
+      const doneCost = sourceTasks.reduce((sum, task) => {
+        return task?.done ? sum + normalizeEstimatedCost(task?.estimatedCost || 0) : sum;
       }, 0);
       const remainCost = totalCost - doneCost;
 
-      tasks.forEach(task => {
+      visibleTasks.forEach(task => {
         const checkbox = task.querySelector('[data-task]');
         task.classList.toggle('done', Boolean(checkbox?.checked));
         updateTaskStatusBadge(task);
         updateTaskDueSummary(task);
       });
 
-      const pendingTasks = tasks
-        .filter(task => !task.querySelector('[data-task]')?.checked)
+      const pendingTasks = sourceTasks
+        .filter(task => !task?.done)
         .sort((a, b) => {
-          const priorityResult = priorityMeta[getTaskPriority(a)].rank - priorityMeta[getTaskPriority(b)].rank;
+          const priorityResult = priorityMeta[a.priority || 'mid'].rank - priorityMeta[b.priority || 'mid'].rank;
           if (priorityResult !== 0) return priorityResult;
-          return compareTaskOrder(a, b);
+          return String(a?.id || '').localeCompare(String(b?.id || ''));
         });
 
-      const pendingUrgentCount = pendingTasks.filter(task => getTaskPriority(task) === 'high').length;
-      const nextTaskTitle = pendingTasks[0]?.querySelector('.task-title')?.textContent?.trim() || '모든 핵심 항목 완료';
+      const pendingUrgentCount = pendingTasks.filter(task => (task?.priority || 'mid') === 'high').length;
+      const nextTaskTitle = pendingTasks[0]?.title?.trim() || '모든 핵심 항목 완료';
       const shortNextTask = nextTaskTitle.length > 10 ? `${nextTaskTitle.slice(0, 10)}...` : nextTaskTitle;
 
       taskSectionKeys.forEach(sectionKey => {
-        const tasksInSection = getTaskCardsInSection(sectionKey);
-        const doneInSection = tasksInSection.filter(task => task.querySelector('[data-task]')?.checked).length;
+        const tasksInSection = sourceTasks.filter(task => normalizeTaskSection(task?.section) === normalizeTaskSection(sectionKey));
+        const doneInSection = tasksInSection.filter(task => task?.done).length;
         const totalInSection = tasksInSection.length;
         const sectionText = `${doneInSection} / ${totalInSection} 완료`;
         const sectionPercent = totalInSection ? (doneInSection / totalInSection) * 100 : 0;
@@ -6036,7 +6181,7 @@
         kpiNextFocus.textContent = nextTaskTitle;
       }
       if (kpiThisWeekDue) {
-        const thisWeekDue = getThisWeekEndDateCount(tasks);
+        const thisWeekDue = getThisWeekEndDateCount(sourceTasks);
         kpiThisWeekDue.textContent = formatCountLabel(thisWeekDue);
       }
       if (kpiRemainingCost) {
@@ -6150,6 +6295,7 @@
       const before = getStateSnapshotFromDOM('render-planner-before');
       const normalizedPlanner = planner && typeof planner === 'object' ? normalizePlannerState(planner) : normalizePlannerState(plannerState || {});
       const renderTasks = Array.isArray(normalizedPlanner.tasks) ? normalizedPlanner.tasks : [];
+      const viewTasks = getPlannerTasksForCurrentView(renderTasks);
       const inputCheckedCount = renderTasks.filter(task => task?.done).length;
       const inputTaskSamples = renderTasks.slice(0, 5).map((task) => `${task?.id || 'unknown'}:${Boolean(task?.done)}`);
       console.log(`[Render Validate] taskCount=${renderTasks.length}, checkedCount=${inputCheckedCount}, sample=${inputTaskSamples.join(', ')}`);
@@ -6157,9 +6303,9 @@
       const currentTasks = [...taskList.querySelectorAll('.task')];
       currentTasks.forEach(task => task.remove());
 
-      const plannerTaskCount = renderTasks.length;
-      renderTasks.forEach((task) => {
+      viewTasks.forEach((task, index) => {
         const nextTask = createTaskElement(task);
+        nextTask.dataset.renderOrder = String(index);
         if (task.isCustom) {
           nextTask.dataset.customTask = 'true';
         }
@@ -6178,7 +6324,10 @@
       const after = getStateSnapshotFromDOM('render-planner-after');
       const renderDomTaskCount = getAllTaskCards().length;
       const renderDomCheckedCount = getAllTaskCards().filter(task => task.querySelector('[data-task]')?.checked).length;
-      console.log(`[Render Validate] renderedTaskCount=${renderDomTaskCount}, renderedCheckedCount=${renderDomCheckedCount}`);
+      console.log(
+        `[Render Validate] stateTaskCount=${renderTasks.length}, stateCheckedCount=${inputCheckedCount}, ` +
+        `domTaskCount=${renderDomTaskCount}, domCheckedCount=${renderDomCheckedCount}`
+      );
       setLastStateMutationSource('renderTaskCardsFromPlanner', 'render');
       logStateMutation('renderTaskCardsFromPlanner', 'render', 'ui-render', { before, after });
       const renderedCheckedCount = renderTasks.filter(task => task?.done).length;
@@ -6758,6 +6907,32 @@
       logStateMutation('notesInput', 'notes', 'user', { before, after });
     });
 
+    taskFilterButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        plannerViewState = normalizePlannerViewState({
+          ...plannerViewState,
+          filter: button.dataset.taskFilter || 'all'
+        });
+        persistPlannerViewState();
+        syncPlannerViewControls();
+        renderTaskCardsFromPlanner(plannerState);
+        updateProgress();
+      });
+    });
+
+    if (taskSortSelect) {
+      taskSortSelect.addEventListener('change', () => {
+        plannerViewState = normalizePlannerViewState({
+          ...plannerViewState,
+          sort: taskSortSelect.value || 'latest'
+        });
+        persistPlannerViewState();
+        syncPlannerViewControls();
+        renderTaskCardsFromPlanner(plannerState);
+        updateProgress();
+      });
+    }
+
     plannerSyncRefreshButtons.forEach((button) => {
       button.addEventListener('click', async () => {
         plannerSyncRefreshButtons.forEach((item) => {
@@ -6911,6 +7086,8 @@
 
     startStoragePoll();
     startPlannerSyncPoll();
+    loadPlannerViewState();
+    syncPlannerViewControls();
     applyPlannerSyncInlineState('idle');
     refreshPlannerSyncRelativeTime();
     if (!plannerSyncRelativeTimer) {
