@@ -3181,11 +3181,7 @@
     const PLANNER_API_URL = `${PLANNER_API_BASE.replace(/\/$/, '')}/data`;
     const PLANNER_SYNC_INTERVAL_MS = 5000;
     const TASK_STORAGE_REVISION_KEY = 'txMoveStorageRevision';
-    const TASK_SYNC_CHANNEL = 'txMovePlannerRealtimeSync';
-    const taskSyncId = `tab-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
-    const taskSyncChannel = typeof BroadcastChannel === 'function'
-      ? new BroadcastChannel(TASK_SYNC_CHANNEL)
-      : null;
+    const PLANNER_DEBUG = false;
     let lastSeenStorageRevision = '';
     let lastServerRevision = '';
     let localLastModifiedAt = 0;
@@ -3208,7 +3204,6 @@
     let plannerSyncReason = '';
     let plannerPollTimer = null;
     let isApplyingRemoteState = false;
-    let storagePollTimer = null;
     let plannerViewState = {
       filter: 'all',
       sort: 'latest'
@@ -3260,10 +3255,19 @@
       }
     };
 
+    function debugLog(...args) {
+      if (PLANNER_DEBUG) console.log(...args);
+    }
+
+    function debugWarn(...args) {
+      if (PLANNER_DEBUG) console.warn(...args);
+    }
+
     function generateTaskId() {
       return `task-${Math.random().toString(36).slice(2, 8)}-${Date.now().toString(36)}`;
     }
 
+    // --- Planner state: normalization, persistence, hydration ---
     function getTaskElementFingerprint(task) {
       return {
         title: normalizeTaskText(task?.title || ''),
@@ -3363,6 +3367,7 @@
       return normalized;
     }
 
+    // --- Checklist view state: filter and sort ---
     function normalizePlannerViewState(raw = {}) {
       const next = raw && typeof raw === 'object' ? raw : {};
       const filter = ['all', 'done', 'pending', 'high'].includes(next.filter) ? next.filter : 'all';
@@ -3419,34 +3424,6 @@
       return filteredTasks.reverse();
     }
 
-    function getPlannerTasksForRender(state = {}) {
-      const plannerTasks = Array.isArray(state.tasks) ? state.tasks : [];
-      const customTasks = Array.isArray(state.customTasks) ? state.customTasks : [];
-      const merged = [];
-      const usedIds = new Set();
-      const customById = new Map();
-
-      plannerTasks.forEach(task => {
-        const normalized = normalizePlannerTask(task);
-        const id = normalized.id || generateTaskId();
-        normalized.id = id;
-        merged.push(normalized);
-        usedIds.add(id);
-      });
-
-      customTasks.forEach(task => {
-        if (!task || !task.id) return;
-        if (usedIds.has(task.id)) return;
-        const normalized = normalizePlannerTask(task);
-        normalized.id = task.id || generateTaskId();
-        normalized.isCustom = true;
-        customById.set(normalized.id, normalized);
-      });
-
-      customById.forEach(task => merged.push(task));
-      return merged;
-    }
-
     function collectTaskStateFromDom() {
       const taskCards = getAllTaskCards();
       const plannerTasks = taskCards.map((task) => {
@@ -3500,12 +3477,6 @@
         `[State Update] source=${normalizeSyncReason(reason)} taskCount=${plannerState.tasks.length} ` +
         `checkedCount=${plannerState.tasks.filter(task => task?.done).length}`
       );
-      return plannerState;
-    }
-
-    function syncPlannerStateFromDOM(reason = 'state-render') {
-      plannerState = normalizePlannerState(plannerState || createEmptyPlannerState());
-      setLastStateMutationSource('syncPlannerStateFromDOM', reason);
       return plannerState;
     }
 
@@ -3632,6 +3603,7 @@
       googleCalendarStatus.style.color = isError ? 'var(--danger)' : '';
     }
 
+    // --- Sync status UI helpers ---
     function formatRelativeTime(timestamp) {
       const value = Number(timestamp) || 0;
       if (!value) return '아직 없음';
@@ -3873,61 +3845,6 @@
       return value;
     }
 
-    function parseStoredJson(value, fallback) {
-      const raw = normalizeStorageValue(value);
-      if (raw === null) {
-        return {
-          value: fallback,
-          parsed: true,
-          missing: true,
-          source: 'missing'
-        };
-      }
-
-      try {
-        const parsed = JSON.parse(raw);
-        return {
-          value: parsed,
-          parsed: true,
-          missing: false,
-          source: 'parsed'
-        };
-      } catch {
-        return {
-          value: fallback,
-          parsed: false,
-          missing: false,
-          source: 'invalid-json'
-        };
-      }
-    }
-
-    function parseStoredArray(value, fallback) {
-      const parsed = parseStoredJson(value, fallback);
-      if (!Array.isArray(parsed.value)) {
-        return {
-          value: fallback,
-          parsed: parsed.parsed,
-          missing: parsed.missing,
-          source: parsed.source
-        };
-      }
-      return parsed;
-    }
-
-    function parseStoredObject(value, fallback) {
-      const parsed = parseStoredJson(value, fallback);
-      if (!parsed.value || Array.isArray(parsed.value) || typeof parsed.value !== 'object') {
-        return {
-          value: fallback,
-          parsed: parsed.parsed,
-          missing: parsed.missing,
-          source: parsed.source
-        };
-      }
-      return parsed;
-    }
-
     function getTemplateTaskState() {
       return templateTaskSignatures.length ? templateTaskSignatures : getTemplateTaskSignatures();
     }
@@ -4113,7 +4030,7 @@
           lastStateMutationSourceEl.textContent = `${lastStateMutationSource} (${lastStateMutationReason})`;
         }
       }
-      console.log('[Planner Mutation] source', {
+      debugLog('[Planner Mutation] source', {
         functionName,
         reason,
         mutationReason: lastStateMutationReason,
@@ -4217,11 +4134,11 @@
       const after = extra.after || {};
       const context = getStateSnapshotFromDOM();
       const diff = diffStateSummary(before, after);
-      console.log(
+      debugLog(
         `[STATE] source=${functionName || 'none'} reason=${normalizeSyncReason(reason)} ` +
         `tasks=${context.taskCount} checked=${context.checkedTaskCount} updatedAt=${context.updatedAt}`
       );
-      console.log(`[Planner Mutation] ${functionName}`, {
+      debugLog(`[Planner Mutation] ${functionName}`, {
         source: summarySource,
         reason,
         mutationSource: lastStateMutationSource,
@@ -4242,8 +4159,6 @@
       });
     }
 
-    let pendingStorageRefresh = null;
-
     function hasMeaningfulLocalPlannerCache() {
       const storageMeta = getPlannerPayloadFromStorageWithMetadata();
       return hasPlannerMeaningfulUserData(storageMeta.planner)
@@ -4263,6 +4178,7 @@
         || normalizedReason === 'load-state-legacy';
     }
 
+    // --- Server sync pipeline ---
     function queuePlannerSync(reason = '', metadata = {}) {
       const before = getStateSnapshotFromDOM('queue-before');
       const effectiveReason = normalizeSyncReason(reason || plannerSyncReason || pendingStateMutationReason);
@@ -4270,7 +4186,7 @@
       const isBlockedPath = isSyncSourceBlockedByPath(effectiveReason);
 
       if (isHydratingInitialState || isApplyingRemoteState || !hasCompletedInitialLoad) {
-        console.log('[Planner Sync] POST blocked because hydration not finished', {
+        debugLog('[Planner Sync] POST blocked because hydration not finished', {
           hydrationState: isHydratingInitialState,
           applyingRemote: isApplyingRemoteState,
           hasCompletedInitialLoad
@@ -4281,7 +4197,7 @@
         return;
       }
       if (isBlockedPath || isBlockedReason) {
-        console.log('[Planner Sync] POST blocked because non-user mutation reason', {
+        debugLog('[Planner Sync] POST blocked because non-user mutation reason', {
           reason: effectiveReason,
           triggerSource: normalizeSyncReason(metadata?.source || '')
         });
@@ -4630,10 +4546,6 @@
       return getPlannerPayloadFromStorageWithMetadata().planner;
     }
 
-    function hasLocalTaskStatePriority() {
-      return hasPendingLocalChanges();
-    }
-
     function getStoredTaskStateForDebug() {
       const payloadMeta = getPlannerPayloadFromStorageWithMetadata();
       return Array.isArray(payloadMeta.planner?.tasks) ? payloadMeta.planner.tasks : [];
@@ -4641,16 +4553,6 @@
 
     function getStoredTaskStateMeta() {
       return getPlannerPayloadFromStorageWithMetadata().taskStateMeta;
-    }
-
-    function readLegacyDoneMapFromStorage() {
-      const rawLegacyDone = localStorage.getItem('txMoveTasks');
-      try {
-        const parsed = JSON.parse(rawLegacyDone || '[]');
-        return Array.isArray(parsed) ? parsed.map((value) => Boolean(value)) : [];
-      } catch {
-        return [];
-      }
     }
 
     function persistPlannerStateToStorage(nextState = plannerState, reason = 'local-storage-write') {
@@ -4674,7 +4576,7 @@
       updatePlannerDebugSummary();
       const persistTaskCount = Array.isArray(planner.tasks) ? planner.tasks.length : 0;
       const persistCheckedCount = Array.isArray(planner.tasks) ? planner.tasks.filter(task => task?.done).length : 0;
-      console.log(
+      debugLog(
         `[Storage Save] source=${normalizedReason}, taskCount=${persistTaskCount}, checkedCount=${persistCheckedCount}`
       );
       notifyStorageSync(`planner-write:${reason || 'auto'}`);
@@ -4739,32 +4641,6 @@
       return normalizedPlanner;
     }
 
-    function applyPlannerStateToLocalStorage(planner = {}) {
-      const source = plannerSyncReason || 'remote-get';
-      if (!planner || typeof planner !== 'object') {
-        setLastStateMutationSource('applyPlannerStateToLocalStorage', 'invalid-planner');
-        logStateMutation('applyPlannerStateToLocalStorage', 'invalid-planner', 'remote-get', {
-          before: getStateSnapshotFromStorage(),
-          after: getStateSnapshotFromStorage()
-        });
-        return;
-      }
-      setLastStateMutationSource('applyPlannerStateToLocalStorage', source);
-      isHydratingInitialState = true;
-      isApplyingRemoteState = true;
-      const beforeWrite = getStateSnapshotFromStorage();
-
-      try {
-        const normalized = normalizePlannerState(planner);
-        applyPlannerStateAndRenderState(normalized, source, { persist: true });
-      } finally {
-        const after = getStateSnapshotFromStorage();
-        logStateMutation('applyPlannerStateToLocalStorage', source, 'remote-get', { before: beforeWrite, after });
-        isApplyingRemoteState = false;
-        isHydratingInitialState = false;
-      }
-    }
-
     async function persistPlannerDataToServer(_source = 'local-change') {
       const postStartedAt = Date.now();
       const before = getStateSnapshotFromStorage();
@@ -4790,7 +4666,7 @@
                   : null;
 
       if (blockedReason) {
-        console.log('[Planner Sync] POST blocked', {
+        debugLog('[Planner Sync] POST blocked', {
           startedAt: postStartedAt,
           hydrationState: isHydratingInitialState,
           applyingRemote: isApplyingRemoteState,
@@ -4809,7 +4685,7 @@
 
       if (!hasMeaningfulPayload) {
         const guardSummary = getPostGuardSummary(planner);
-        console.log('[Planner Sync] POST blocked because payload is empty/default', {
+        debugLog('[Planner Sync] POST blocked because payload is empty/default', {
           startedAt: postStartedAt,
           ...guardSummary
         });
@@ -4829,7 +4705,7 @@
         return;
       }
 
-      console.log('[Planner Sync] POST allowed because user change after initial load', {
+      debugLog('[Planner Sync] POST allowed because user change after initial load', {
         startedAt: postStartedAt,
         source: _source,
         localLastModifiedAt
@@ -4840,7 +4716,7 @@
       const summary = buildPlannerPayloadSummary(payload);
       const isTemplateOrDefaultPayload = !hasMeaningfulPayload;
       const allowedSource = 'persistPlannerDataToServer';
-      console.log('[Planner Sync] POST /data start', {
+        debugLog('[Planner Sync] POST /data start', {
         startedAt: postStartedAt,
         localLastModifiedAt,
         hasPlanner: !!payload?.planner,
@@ -4848,7 +4724,7 @@
           reason: syncReason,
           summary
         });
-        console.log(`[Planner Sync] POST /data`, {
+        debugLog(`[Planner Sync] POST /data`, {
           method: 'POST',
           url: PLANNER_API_URL,
           payload: summary,
@@ -4909,13 +4785,13 @@
           localSyncInProgress = false;
           localLastModifiedAt = 0;
           plannerSyncReason = '';
-          console.warn('[Planner Sync] POST response revision is older than request timestamp; reset sync lock manually', {
+          debugWarn('[Planner Sync] POST response revision is older than request timestamp; reset sync lock manually', {
             localRevisionAtRequest,
             remoteRevision
           });
         }
         logStateMutation('persistPlannerDataToServer', 'success', 'server-save', { before, after });
-        console.log('[Planner Sync] POST /data success', {
+        debugLog('[Planner Sync] POST /data success', {
           startedAt: postStartedAt,
           updatedAt: remoteRevision || payload.updatedAt,
           localLastModifiedAt
@@ -4943,7 +4819,7 @@
       }
       if (!force && hasPendingLocalChanges()) {
         setLastStateMutationSource('loadPlannerDataFromServer', 'local-state-priority');
-        console.log('[Planner Sync] GET /data skipped by local priority', {
+        debugLog('[Planner Sync] GET /data skipped by local priority', {
           localSyncInProgress,
           localLastModifiedAt
         });
@@ -4960,7 +4836,7 @@
       const localMeta = getPlannerPayloadFromStorageWithMetadata();
       lastSyncRequestAt = getStartedAt;
       setLastStateMutationSource('loadPlannerDataFromServer', force ? 'manual-get-start' : 'hydrate-get-start');
-      console.log('[Planner Sync] GET /data start', {
+      debugLog('[Planner Sync] GET /data start', {
         startedAt: getStartedAt,
         force,
         localLastModifiedAt,
@@ -4987,7 +4863,7 @@
           Number(localMeta.localUpdatedAt) || 0,
           Number(lastRemoteAppliedAt) || 0
         );
-        console.log('[Planner Sync] GET /data response', {
+        debugLog('[Planner Sync] GET /data response', {
           status: res.status,
           updatedAt: remoteRevision,
           plannerTaskCount: remoteTaskCount,
@@ -4995,7 +4871,7 @@
         });
 
         if (!hasRemotePlanner) {
-          console.log('[Planner Sync] GET /data ignored', {
+          debugLog('[Planner Sync] GET /data ignored', {
             reason: 'empty-remote-planner',
             remoteUpdatedAt: remoteRevision
           });
@@ -5008,7 +4884,7 @@
         }
 
         if (!force && remoteRevision > 0 && currentUpdatedAt > 0 && remoteRevision <= currentUpdatedAt) {
-          console.log('[Planner Sync] GET /data ignored', {
+          debugLog('[Planner Sync] GET /data ignored', {
             reason: 'not-newer-than-current',
             remoteUpdatedAt: remoteRevision,
             currentUpdatedAt
@@ -5028,7 +4904,7 @@
         });
         applyPlannerStateAndRenderState(appliedPlanner, force ? 'manual-sync' : 'hydrate-server');
         setLastHydrateSource(force ? 'manual-server' : 'server');
-        console.log(
+        debugLog(
           `[Hydrate] source=${force ? 'manual-server' : 'server'} ` +
           `taskCount=${appliedPlanner.tasks.length} checkedCount=${appliedPlanner.tasks.filter(task => task?.done).length}`
         );
@@ -5041,7 +4917,7 @@
         plannerSyncReason = '';
         logStateMutation('loadPlannerDataFromServer', 'applied', 'remote-get', { before: beforeApply, after: afterApply });
         setLastStateMutationSource('loadPlannerDataFromServer', 'applied');
-        console.log(`[GET applied] updatedAt=${lastRemoteAppliedAt}`);
+        debugLog(`[GET applied] updatedAt=${lastRemoteAppliedAt}`);
         lastServerLoadAt = Date.now();
         if (lastServerLoadAtEl) {
           lastServerLoadAtEl.textContent = new Date(lastServerLoadAt).toLocaleString('ko-KR');
@@ -5071,26 +4947,9 @@
     }
 
     function notifyStorageSync(source = 'local') {
-      const revision = `${Date.now()}-${taskSyncId}-${source}`;
+      const revision = `${Date.now()}-${source}`;
       localStorage.setItem(TASK_STORAGE_REVISION_KEY, revision);
       lastSeenStorageRevision = revision;
-
-      if (taskSyncChannel) {
-        taskSyncChannel.postMessage({
-          type: 'state-sync',
-          source: taskSyncId,
-          revision,
-          keys: TASK_STORAGE_KEYS
-        });
-      }
-    }
-
-    function pollForStorageSync() {
-      return;
-    }
-
-    function startStoragePoll() {
-      return;
     }
 
     function startPlannerSyncPoll() {
@@ -5104,18 +4963,6 @@
         }
         loadPlannerDataFromServer(false);
       }, PLANNER_SYNC_INTERVAL_MS);
-    }
-
-    function isEditingTaskInline() {
-      const active = document.activeElement;
-      return !!active && (
-        active.matches?.('.task-title[contenteditable="true"], .task-desc[contenteditable="true"], .task-cost-input') ||
-        active.closest?.('.task, .notes, #notes')
-      );
-    }
-
-    function scheduleStorageRefresh() {
-      return;
     }
 
     function getSectionContainer(section) {
@@ -5952,17 +5799,6 @@
       return match || 'mid';
     }
 
-    function getSavedTaskState() {
-      const raw = localStorage.getItem('txMoveTaskState');
-      try {
-        const parsed = JSON.parse(raw || '[]');
-        if (!Array.isArray(parsed)) return new Map();
-        return new Map(parsed.map(item => [item.id, item]));
-      } catch {
-        return new Map();
-      }
-    }
-
     function ensureStableTaskId(task, legacyCounters) {
       if (task.dataset.taskId) return;
 
@@ -6116,15 +5952,6 @@
       const after = getStateSnapshotFromDOM('move-date-after');
       setLastStateMutationSource('updateMoveDate', 'user-input');
       logStateMutation('updateMoveDate', 'move-date-update', 'user', { before, after });
-    }
-
-    function persistTaskState(reason = 'state-render') {
-      const before = getStateSnapshotFromStorage();
-      const normalizedReason = normalizeSyncReason(reason || pendingStateMutationReason || plannerSyncReason || 'state-render');
-      persistPlannerStateToStorage(plannerState, normalizedReason);
-      const after = getStateSnapshotFromStorage();
-      setLastStateMutationSource('persistTaskState', normalizedReason);
-      logStateMutation('persistTaskState', normalizedReason, 'local-storage-write', { before, after });
     }
 
     function createTaskElement({
@@ -6440,7 +6267,7 @@
       const viewTasks = getPlannerTasksForCurrentView(renderTasks);
       const inputCheckedCount = renderTasks.filter(task => task?.done).length;
       const inputTaskSamples = renderTasks.slice(0, 5).map((task) => `${task?.id || 'unknown'}:${Boolean(task?.done)}`);
-      console.log(`[Render Validate] taskCount=${renderTasks.length}, checkedCount=${inputCheckedCount}, sample=${inputTaskSamples.join(', ')}`);
+      debugLog(`[Render Validate] taskCount=${renderTasks.length}, checkedCount=${inputCheckedCount}, sample=${inputTaskSamples.join(', ')}`);
 
       const currentTasks = [...taskList.querySelectorAll('.task')];
       currentTasks.forEach(task => task.remove());
@@ -6466,7 +6293,7 @@
       const after = getStateSnapshotFromDOM('render-planner-after');
       const renderDomTaskCount = getAllTaskCards().length;
       const renderDomCheckedCount = getAllTaskCards().filter(task => task.querySelector('[data-task]')?.checked).length;
-      console.log(
+      debugLog(
         `[Render Validate] stateTaskCount=${renderTasks.length}, stateCheckedCount=${inputCheckedCount}, ` +
         `domTaskCount=${renderDomTaskCount}, domCheckedCount=${renderDomCheckedCount}`
       );
@@ -6524,7 +6351,7 @@
         return false;
       }
 
-      console.log('[Planner Seed] default-seed attempt', {
+      debugLog('[Planner Seed] default-seed attempt', {
         reason: normalizedReason,
         hasRemotePlannerApplied,
         hasTemplateBootstrapRun,
@@ -6540,7 +6367,7 @@
         });
         applyPlannerStateAndRenderState(seededPlanner, normalizedReason);
         setLastHydrateSource('default');
-        console.log(
+        debugLog(
           `[Hydrate] source=default taskCount=${seededPlanner.tasks.length} ` +
           `checkedCount=${seededPlanner.tasks.filter(task => task?.done).length}`
         );
@@ -6604,13 +6431,13 @@
       const storageCheckedCount = storageTasks.filter((task) => Boolean(task && task.done)).length;
       const hasMeaningfulLocalPlannerState = hasPlannerMeaningfulUserData(localPlanner) || storageTaskCount > 0;
       const storageSource = storageMeta.taskStateMeta?.source || 'missing';
-      console.log('[Load Restore] storageKeys', storageMeta.keyPresence, {
+      debugLog('[Load Restore] storageKeys', storageMeta.keyPresence, {
         hasAnyStoragePresence: storageMeta.hasAnyStoragePresence,
         hasMeaningfulLocalPlannerState,
         taskStateSource: storageSource,
         parseFailed: storageMeta.parseFailed
       });
-      console.log('[Load Restore] pre-parse', {
+      debugLog('[Load Restore] pre-parse', {
         storageTaskCount,
         storageCheckedCount,
         storageTaskStateRawExists: storageMeta.keyPresence.txMovePlannerState || storageMeta.keyPresence.txMoveTaskState
@@ -6621,14 +6448,14 @@
 
       applyPlannerStateAndRenderState(localPlanner, 'hydrate-local');
       setLastHydrateSource(storageSource === 'legacy-storage' ? 'legacy-local' : 'local');
-      console.log(
+      debugLog(
         `[Hydrate] source=${storageSource === 'legacy-storage' ? 'legacy-local' : 'local'} ` +
         `taskCount=${localPlanner.tasks.length} checkedCount=${localPlanner.tasks.filter(task => task?.done).length}`
       );
 
       const loadRenderTaskCount = getAllTaskCards().length;
       const loadRenderCheckedCount = getAllTaskCards().filter(task => task.querySelector('[data-task]')?.checked).length;
-      console.log(
+      debugLog(
         `[Load Restore] storageTaskCount=${storageTaskCount}, storageCheckedCount=${storageCheckedCount}, ` +
         `renderTaskCount=${loadRenderTaskCount}, renderCheckedCount=${loadRenderCheckedCount}`
       );
@@ -6643,7 +6470,7 @@
 
     taskList.addEventListener('change', event => {
       if (event.target.matches('.task-due')) {
-        console.log('[Planner Sync Trigger] task due-date changed');
+        debugLog('[Planner Sync Trigger] task due-date changed');
         const task = event.target.closest('.task');
         if (!task) return;
         const taskId = task.dataset.taskId || '';
@@ -6664,7 +6491,7 @@
       }
 
       if (event.target.matches('.task-priority')) {
-        console.log('[Planner Sync Trigger] task priority changed');
+        debugLog('[Planner Sync Trigger] task priority changed');
         const task = event.target.closest('.task');
         if (!task) return;
         const taskId = task.dataset.taskId || '';
@@ -6678,7 +6505,7 @@
       }
 
       if (event.target.matches('[data-task]')) {
-        console.log('[Planner Sync Trigger] task done state changed');
+        debugLog('[Planner Sync Trigger] task done state changed');
         const task = event.target.closest('.task');
         if (!task) return;
         const taskId = task.dataset.taskId || '';
@@ -6696,8 +6523,8 @@
         const stateTask = (Array.isArray(plannerState?.tasks) ? plannerState.tasks : []).find((item) => item?.id === taskId);
         const stateDone = stateTask ? Boolean(stateTask.done) : null;
         const storageDone = storageTask ? Boolean(storageTask.done) : null;
-        console.log(`[Task Save Check] taskId=${taskId || 'none'}, uiDone=${checked}, stateDone=${stateDone}, storageDone=${storageDone}`);
-        console.log('[Task Save Check] localStorage txMovePlannerState parsed', {
+        debugLog(`[Task Save Check] taskId=${taskId || 'none'}, uiDone=${checked}, stateDone=${stateDone}, storageDone=${storageDone}`);
+        debugLog('[Task Save Check] localStorage txMovePlannerState parsed', {
           taskCount: storageTaskState.length,
           checkedCount: storageTaskState.filter(task => task?.done).length
         });
@@ -6708,7 +6535,7 @@
 
     taskList.addEventListener('input', event => {
       if (event.target.matches('.task-cost-input')) {
-        console.log('[Planner Sync Trigger] task cost changed');
+        debugLog('[Planner Sync Trigger] task cost changed');
         const task = event.target.closest('.task');
         if (!task) return;
         const taskId = task.dataset.taskId || '';
@@ -6729,7 +6556,7 @@
       if (!event.target.matches('.task-title[contenteditable="true"], .task-desc[contenteditable="true"]')) {
         return;
       }
-      console.log('[Planner Sync Trigger] task title/desc edited');
+      debugLog('[Planner Sync Trigger] task title/desc edited');
       const task = event.target.closest('.task');
       if (!task) return;
       const taskId = task.dataset.taskId || '';
@@ -6830,7 +6657,7 @@
 
       const addCostButton = event.target.closest('.task-cost-add');
       if (addCostButton) {
-        console.log('[Planner Sync Trigger] task cost edit opened');
+        debugLog('[Planner Sync Trigger] task cost edit opened');
         const wrapper = clickedTask.querySelector('.task-cost-wrap');
         const costInput = wrapper?.querySelector('.task-cost-input');
         if (wrapper && costInput) {
@@ -6846,7 +6673,7 @@
 
       const confirmCostButton = event.target.closest('.task-cost-confirm');
       if (confirmCostButton) {
-        console.log('[Planner Sync Trigger] task cost confirmed');
+        debugLog('[Planner Sync Trigger] task cost confirmed');
         const wrapper = clickedTask.querySelector('.task-cost-wrap');
         const costInput = wrapper?.querySelector('.task-cost-input');
         if (wrapper && costInput) {
@@ -6968,7 +6795,7 @@
 
     addTaskBtn.addEventListener('click', () => {
       const before = getStateSnapshotFromDOM('custom-task-add-before');
-      console.log('[Planner Sync Trigger] custom task added');
+      debugLog('[Planner Sync Trigger] custom task added');
       const title = customTaskTitle.value.trim();
       const desc = customTaskDesc.value.trim();
       const priority = customTaskPriority.value;
@@ -7018,7 +6845,7 @@
 
     budgetIds.forEach(id => {
       document.getElementById(id).addEventListener('input', () => {
-        console.log('[Planner Sync Trigger] budget changed');
+        debugLog('[Planner Sync Trigger] budget changed');
         updateBudget('user-budget', { shouldSync: true });
       });
     });
@@ -7029,7 +6856,7 @@
     });
 
     moveDateInput.addEventListener('input', event => {
-      console.log('[Planner Sync Trigger] move date changed');
+      debugLog('[Planner Sync Trigger] move date changed');
       updateMoveDate(event.target.value);
       queuePlannerSync('user-move-date');
       updateProgress();
@@ -7037,7 +6864,7 @@
 
     notes.addEventListener('input', () => {
       const before = getStateSnapshotFromDOM('notes-before');
-      console.log('[Planner Sync Trigger] notes changed');
+      debugLog('[Planner Sync Trigger] notes changed');
       plannerState = normalizePlannerState({
         ...(plannerState || createEmptyPlannerState()),
         notes: notes.value || ''
@@ -7167,7 +6994,7 @@
       if (!templateTaskSignatures.length) {
         templateTaskSignatures = getTemplateTaskSignatures();
       }
-      console.log('[Planner Sync] initial load start', { startedAt: initStartAt });
+      debugLog('[Planner Sync] initial load start', { startedAt: initStartAt });
       try {
         const remoteLoadResult = await loadPlannerDataFromServer(true);
         if (!remoteLoadResult || !remoteLoadResult.applied) {
@@ -7182,7 +7009,7 @@
         setLastStateMutationSource('initializePlannerState', 'end');
         const after = getStateSnapshotFromDOM('init-after');
         logStateMutation('initializePlannerState', 'initial-load', 'ui-render', { before, after });
-        console.log('[Planner Sync] initial load end', {
+        debugLog('[Planner Sync] initial load end', {
           endedAt: Date.now(),
           hasCompletedInitialLoad,
           hydrationState: isHydratingInitialState
@@ -7202,31 +7029,6 @@
       queuePlannerSync('user-task-edit');
     });
 
-    window.addEventListener('visibilitychange', () => {
-      if (!document.hidden) {
-        scheduleStorageRefresh();
-      }
-    });
-
-    window.addEventListener('focus', () => {
-      scheduleStorageRefresh();
-    });
-
-    window.addEventListener('storage', event => {
-      if (!event.key) return;
-
-      if (![...TASK_STORAGE_KEYS, TASK_STORAGE_REVISION_KEY].includes(event.key)) {
-        return;
-      }
-
-      scheduleStorageRefresh();
-    });
-
-    if (taskSyncChannel) {
-      taskSyncChannel.addEventListener('message', () => {});
-    }
-
-    startStoragePoll();
     startPlannerSyncPoll();
     loadPlannerViewState();
     syncPlannerViewControls();
