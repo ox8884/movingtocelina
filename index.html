@@ -560,6 +560,35 @@
       min-width: 0;
     }
 
+    .server-sync-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .server-sync-button {
+      appearance: none;
+      border: 1px solid rgba(255, 241, 228, 0.24);
+      background: rgba(255, 248, 242, 0.08);
+      color: #fff8f2;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.18s ease, border-color 0.18s ease, opacity 0.18s ease;
+    }
+
+    .server-sync-button:hover:not(:disabled) {
+      background: rgba(255, 248, 242, 0.14);
+      border-color: rgba(255, 241, 228, 0.4);
+    }
+
+    .server-sync-button:disabled {
+      opacity: 0.56;
+      cursor: wait;
+    }
+
     .summary-topline {
       display: flex;
       align-items: center;
@@ -2049,6 +2078,9 @@
             <span>서버 동기화 상태</span>
             <span class="summary-badge" id="serverSyncStatus">대기 중</span>
           </div>
+          <div class="server-sync-actions">
+            <button type="button" class="server-sync-button" id="serverSyncRefreshBtn">지금 동기화</button>
+          </div>
           <div class="server-sync-grid">
             <div class="row">
               <span>마지막 동기화</span>
@@ -2765,6 +2797,7 @@
     const plannerTaskSummaryEl = document.getElementById('plannerTaskSummary');
     const lastRenderTaskSummaryEl = document.getElementById('lastRenderTaskSummary');
     const serverSyncNotes = document.getElementById('serverSyncNotes');
+    const serverSyncRefreshBtn = document.getElementById('serverSyncRefreshBtn');
     const lastStateMutationSourceEl = document.getElementById('lastStateMutationSource');
     const lastAllowedPostSourceEl = document.getElementById('lastAllowedPostSource');
     const lastAllowedPostReasonEl = document.getElementById('lastAllowedPostReason');
@@ -6485,6 +6518,18 @@
       setLastStateMutationSource('notes', 'input');
       logStateMutation('notesInput', 'notes', 'user', { before, after });
     });
+
+    if (serverSyncRefreshBtn) {
+      serverSyncRefreshBtn.addEventListener('click', async () => {
+        serverSyncRefreshBtn.disabled = true;
+        setPlannerSyncStatus('서버 다시 불러오는 중...', false);
+        try {
+          await requestServerSync('user-manual-refresh');
+        } finally {
+          serverSyncRefreshBtn.disabled = false;
+        }
+      });
+    }
 
     exportBtn.addEventListener('click', async () => {
       try {
