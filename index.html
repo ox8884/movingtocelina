@@ -3149,10 +3149,12 @@
             <button class="primary" id="exportBtn" type="button">메모 복사하기</button>
             <button class="secondary" id="exportDataBtn" type="button">데이터 내보내기</button>
             <button class="secondary" id="importDataBtn" type="button">데이터 가져오기</button>
+            <button class="secondary" id="restoreAutoBackupBtn" type="button">최근 자동 백업 복원</button>
             <button class="secondary" id="resetBtn" type="button">체크리스트 초기화</button>
           </div>
           <input id="importDataInput" type="file" accept="application/json,.json" hidden />
           <div class="helper" id="plannerSyncStatus" role="status" aria-live="polite"></div>
+          <div class="helper" id="autoBackupStatus" role="status" aria-live="polite">자동 백업을 준비 중입니다.</div>
           <div class="helper">체크 상태, 메모, 예산, 추가한 항목 모두 자동 저장됩니다. 필요하면 JSON으로 내보내거나 다시 가져올 수 있습니다.</div>
         </section>
 
@@ -3253,7 +3255,9 @@
     const exportDataBtn = document.getElementById('exportDataBtn');
     const importDataBtn = document.getElementById('importDataBtn');
     const importDataInput = document.getElementById('importDataInput');
+    const restoreAutoBackupBtn = document.getElementById('restoreAutoBackupBtn');
     const resetBtn = document.getElementById('resetBtn');
+    const autoBackupStatus = document.getElementById('autoBackupStatus');
     const beforeMoveProgressText = document.getElementById('beforeMoveProgressText');
     const beforeMoveProgress = document.getElementById('beforeMoveProgress');
     const movingWeekProgressText = document.getElementById('movingWeekProgressText');
@@ -3349,6 +3353,9 @@
     const TASK_SOON_DAYS = 7;
     const PLANNER_STATE_STORAGE_KEY = 'txMovePlannerState';
     const PLANNER_VIEW_STORAGE_KEY = 'txMovePlannerView';
+    const AUTO_BACKUP_STORAGE_KEY = 'txMoveAutoBackups';
+    const AUTO_BACKUP_LIMIT = 12;
+    const AUTO_BACKUP_DEBOUNCE_MS = 900;
     const TASK_STORAGE_KEYS = [
       PLANNER_STATE_STORAGE_KEY,
       'txMoveLocalUpdatedAt'
@@ -3379,6 +3386,9 @@
     let plannerSyncTimer = null;
     let plannerSyncReason = '';
     let plannerPollTimer = null;
+    let autoBackupTimer = null;
+    let lastAutoBackupSavedAt = 0;
+    let lastAutoBackupFingerprint = '';
     let isApplyingRemoteState = false;
     let plannerViewState = {
       filter: 'all',
@@ -4934,6 +4944,7 @@
         localStorage.setItem(PLANNER_STATE_STORAGE_KEY, JSON.stringify(planner));
         localStorage.setItem('txMoveLocalUpdatedAt', nextLocalUpdatedAt);
       });
+      scheduleAutoBackup(normalizedReason);
       setLastStorageSaveSource(normalizedReason);
       updatePlannerDebugSummary();
       const persistTaskCount = Array.isArray(planner.tasks) ? planner.tasks.length : 0;
@@ -4979,6 +4990,181 @@
         version: 1,
         planner
       };
+    }
+
+    function formatAutoBackupTimestamp(timestamp) {
+      const parsed = Number(timestamp);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        return '없음';
+      }
+      return new Date(parsed).toLocaleString('ko-KR');
+    }
+
+    function getPlannerBackupFingerprint(planner = {}) {
+      return JSON.stringify(normalizePlannerState(planner));
+    }
+
+    function normalizeAutoBackupEntry(entry = {}) {
+      const planner = normalizePlannerState(entry?.planner || {});
+      const savedAt = Number(entry?.savedAt) || 0;
+      if (!savedAt || !hasPlannerMeaningfulUserData(planner)) {
+        return null;
+      }
+      return {
+        version: Number(entry?.version) || 1,
+        savedAt,
+        reason: normalizeSyncReason(entry?.reason || 'auto-backup'),
+        planner
+      };
+    }
+
+    function getStoredAutoBackupEntries() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(AUTO_BACKUP_STORAGE_KEY) || '[]');
+        if (!Array.isArray(parsed)) {
+          return [];
+        }
+        return parsed
+          .map(normalizeAutoBackupEntry)
+          .filter(Boolean)
+          .sort((a, b) => Number(b.savedAt) - Number(a.savedAt));
+      } catch {
+        return [];
+      }
+    }
+
+    function persistAutoBackupEntries(entries = []) {
+      const normalized = Array.isArray(entries)
+        ? entries.map(normalizeAutoBackupEntry).filter(Boolean).slice(0, AUTO_BACKUP_LIMIT)
+        : [];
+      localStorage.setItem(AUTO_BACKUP_STORAGE_KEY, JSON.stringify(normalized));
+      return normalized;
+    }
+
+    function getLatestAutoBackupEntry() {
+      return getStoredAutoBackupEntries()[0] || null;
+    }
+
+    function updateAutoBackupUI(message = '') {
+      const backups = getStoredAutoBackupEntries();
+      const latest = backups[0] || null;
+      lastAutoBackupSavedAt = Number(latest?.savedAt) || 0;
+      lastAutoBackupFingerprint = latest ? getPlannerBackupFingerprint(latest.planner) : '';
+
+      if (restoreAutoBackupBtn) {
+        restoreAutoBackupBtn.disabled = !latest;
+      }
+
+      if (!autoBackupStatus) return;
+
+      if (!latest) {
+        autoBackupStatus.textContent = message || '자동 백업은 사용자 변경 후 최근 12개까지 보관됩니다.';
+        return;
+      }
+
+      const summary = `자동 백업 ${backups.length}개 보관 중. 최근 저장: ${formatAutoBackupTimestamp(latest.savedAt)}`;
+      autoBackupStatus.textContent = message ? `${summary} · ${message}` : summary;
+    }
+
+    function saveAutoBackupSnapshot(reason = 'auto-backup', options = {}) {
+      const {
+        force = false,
+        ignoreReasonGuard = false
+      } = options;
+      const normalizedReason = normalizeSyncReason(reason);
+      const planner = normalizePlannerState(plannerState || getPlannerPayloadFromStorage());
+
+      if (!hasPlannerMeaningfulUserData(planner)) {
+        updateAutoBackupUI();
+        return false;
+      }
+
+      if (!force && !ignoreReasonGuard && !isAllowedUserPostReason(normalizedReason)) {
+        updateAutoBackupUI();
+        return false;
+      }
+
+      const fingerprint = getPlannerBackupFingerprint(planner);
+      const existing = getStoredAutoBackupEntries();
+      const latest = existing[0] || null;
+      const latestFingerprint = latest ? getPlannerBackupFingerprint(latest.planner) : '';
+
+      if (!force && latestFingerprint === fingerprint) {
+        lastAutoBackupFingerprint = fingerprint;
+        lastAutoBackupSavedAt = Number(latest?.savedAt) || lastAutoBackupSavedAt;
+        updateAutoBackupUI();
+        return false;
+      }
+
+      const entry = {
+        version: 1,
+        savedAt: Date.now(),
+        reason: normalizedReason,
+        planner
+      };
+      const nextEntries = [
+        entry,
+        ...existing.filter((item) => getPlannerBackupFingerprint(item.planner) !== fingerprint)
+      ].slice(0, AUTO_BACKUP_LIMIT);
+
+      persistAutoBackupEntries(nextEntries);
+      lastAutoBackupFingerprint = fingerprint;
+      lastAutoBackupSavedAt = entry.savedAt;
+      updateAutoBackupUI('문제 생기면 바로 최근 자동 백업으로 복원할 수 있습니다.');
+      return true;
+    }
+
+    function scheduleAutoBackup(reason = 'auto-backup', options = {}) {
+      const normalizedReason = normalizeSyncReason(reason);
+      if (!options.force && !isAllowedUserPostReason(normalizedReason)) {
+        return;
+      }
+      if (autoBackupTimer) {
+        clearTimeout(autoBackupTimer);
+      }
+      autoBackupTimer = window.setTimeout(() => {
+        autoBackupTimer = null;
+        saveAutoBackupSnapshot(normalizedReason, options);
+      }, AUTO_BACKUP_DEBOUNCE_MS);
+    }
+
+    function flushScheduledAutoBackup(reason = 'pagehide') {
+      if (autoBackupTimer) {
+        clearTimeout(autoBackupTimer);
+        autoBackupTimer = null;
+      }
+      saveAutoBackupSnapshot(reason, {
+        ignoreReasonGuard: true
+      });
+    }
+
+    function restoreLatestAutoBackup() {
+      const latest = getLatestAutoBackupEntry();
+      if (!latest) {
+        updateAutoBackupUI('복원할 자동 백업이 아직 없습니다.');
+        return false;
+      }
+
+      const restoreConfirmed = window.confirm(
+        `최근 자동 백업(${formatAutoBackupTimestamp(latest.savedAt)})으로 되돌릴까요? 현재 화면의 변경 내용은 덮어써집니다.`
+      );
+      if (!restoreConfirmed) {
+        return false;
+      }
+
+      saveAutoBackupSnapshot('pre-auto-backup-restore', {
+        force: true,
+        ignoreReasonGuard: true
+      });
+      applyPlannerStateAndRenderState(latest.planner, 'user-manual-save');
+      queuePlannerSync('user-manual-save');
+      setPlannerSyncStatus('자동 백업 복원됨 ✔', false, {
+        state: 'saved',
+        detail: `최근 자동 백업 시점(${formatAutoBackupTimestamp(latest.savedAt)})으로 되돌렸습니다.`,
+        transient: true
+      });
+      updateAutoBackupUI('최근 자동 백업을 복원했습니다.');
+      return true;
     }
 
     function parsePlannerImportPayload(rawText = '') {
@@ -7394,6 +7580,10 @@
       try {
         const text = await file.text();
         const importedPlanner = parsePlannerImportPayload(text);
+        saveAutoBackupSnapshot('pre-import', {
+          force: true,
+          ignoreReasonGuard: true
+        });
         applyPlannerStateAndRenderState(importedPlanner, 'user-manual-save');
         queuePlannerSync('user-manual-save');
         setPlannerSyncStatus('저장됨 ✔', false, {
@@ -7410,6 +7600,12 @@
         importDataInput.value = '';
       }
     });
+
+    if (restoreAutoBackupBtn) {
+      restoreAutoBackupBtn.addEventListener('click', () => {
+        restoreLatestAutoBackup();
+      });
+    }
 
     if (installAppBtn) {
       installAppBtn.addEventListener('click', async () => {
@@ -7487,6 +7683,10 @@
     }
 
     resetBtn.addEventListener('click', () => {
+      saveAutoBackupSnapshot('pre-reset', {
+        force: true,
+        ignoreReasonGuard: true
+      });
       plannerState = normalizePlannerState({
         ...(plannerState || createEmptyPlannerState()),
         tasks: (Array.isArray(plannerState?.tasks) ? plannerState.tasks : []).map(task => ({
@@ -7503,6 +7703,7 @@
     syncPlannerViewControls();
     applyPlannerSyncInlineState('idle');
     refreshPlannerSyncRelativeTime();
+    updateAutoBackupUI();
     if (isStandaloneDisplayMode()) {
       updateInstallPromptUI('앱으로 실행 중입니다.', { showButton: false });
     } else if (isAndroidLikeDevice()) {
@@ -7518,6 +7719,9 @@
     if (!plannerSyncRelativeTimer) {
       plannerSyncRelativeTimer = window.setInterval(refreshPlannerSyncRelativeTime, 1000);
     }
+    window.addEventListener('pagehide', () => {
+      flushScheduledAutoBackup('pagehide');
+    });
     initializePlannerState().catch(() => {
       if (!loadState('hydrate-local-fallback')) {
         seedDefaultTasks('default-seed');
